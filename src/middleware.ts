@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { verifySession, SESSION_COOKIE_NAME } from "@/lib/auth";
+import { verifySession, SESSION_COOKIE_NAME } from "@/lib/session";
 
 /**
  * Route protection.
