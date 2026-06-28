@@ -1,9 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { SafeImage as Image } from "@/components/ui/safe-image";
 import { useOrders } from "@/hooks/use-orders";
-import { useHydrate } from "@/hooks/use-hydrate";
 import { formatTHB, formatThaiDate, cn } from "@/lib/utils";
 import { AdminTable } from "@/components/admin/admin-table";
 import { Badge } from "@/components/ui/badge";
@@ -14,10 +13,27 @@ import {
 import type { Order, OrderStatus } from "@/types";
 
 export default function AdminOrdersPage() {
-  useHydrate({ orders: true });
   const orders = useOrders((s) => s.orders);
+  const setOrders = useOrders((s) => s.setOrders);
   const updateStatus = useOrders((s) => s.updateStatus);
   const [filter, setFilter] = useState<OrderStatus | "ALL">("ALL");
+
+  // Admin view must always show every user's orders. The shared `useOrders`
+  // store is persisted to localStorage and may already hold the admin's own
+  // user-scoped orders, so we cannot rely on "fetch only when empty".
+  // Force-refresh from /api/admin/orders on every mount instead.
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/admin/orders")
+      .then((r) => r.json())
+      .then((d) => {
+        if (!cancelled && d.data) setOrders(d.data);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [setOrders]);
 
   const filtered =
     filter === "ALL" ? orders : orders.filter((o) => o.status === filter);

@@ -4,6 +4,8 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { User } from "@/types";
 import { useCart } from "@/hooks/use-cart";
+import { useOrders } from "@/hooks/use-orders";
+import { useProducts } from "@/hooks/use-products";
 
 interface AuthState {
   user: User | null;
@@ -85,8 +87,11 @@ export const useAuth = create<AuthState>()(
           await fetch("/api/auth/logout", { method: "POST" });
         } finally {
           set({ user: null });
-          // Reset cart to empty and force re-hydration on next login.
+          // Reset persisted stores so the next user doesn't see the previous
+          // user's (or admin's) orders/products/cart from localStorage.
           useCart.setState({ items: [], hydrated: false });
+          useOrders.setState({ orders: [] });
+          useProducts.setState({ products: [] });
         }
       },
     }),

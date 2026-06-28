@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
 import {
   Package,
@@ -11,7 +12,6 @@ import {
 } from "lucide-react";
 import { useProducts } from "@/hooks/use-products";
 import { useOrders } from "@/hooks/use-orders";
-import { useHydrate } from "@/hooks/use-hydrate";
 import { formatTHB } from "@/lib/utils";
 import { ORDER_STATUS_META, LOW_STOCK_THRESHOLD } from "@/lib/constants";
 
@@ -22,9 +22,31 @@ import { ORDER_STATUS_META, LOW_STOCK_THRESHOLD } from "@/lib/constants";
  * is a server component that fetches the featured-product hero images.
  */
 export function AdminDashboardClient() {
-  useHydrate({ products: true, orders: true });
   const products = useProducts((s) => s.products);
+  const setProducts = useProducts((s) => s.setProducts);
   const orders = useOrders((s) => s.orders);
+  const setOrders = useOrders((s) => s.setOrders);
+
+  // Admin views must always reflect the full DB state. The shared stores are
+  // persisted to localStorage and may already hold user-scoped data, so we
+  // force-refresh from the admin endpoints on every mount instead of relying
+  // on useHydrate's "fetch only when empty" behavior.
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([
+      fetch("/api/admin/products").then((r) => r.json()),
+      fetch("/api/admin/orders").then((r) => r.json()),
+    ])
+      .then(([p, o]) => {
+        if (cancelled) return;
+        if (p.data) setProducts(p.data);
+        if (o.data) setOrders(o.data);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [setProducts, setOrders]);
 
   const totalRevenue = orders
     .filter((o) => o.status !== "CANCELLED")
