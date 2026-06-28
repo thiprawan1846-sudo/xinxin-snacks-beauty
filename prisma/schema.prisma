@@ -1,0 +1,171 @@
+// Prisma schema for XinXin Snacks & Beauty
+// PostgreSQL on Supabase. MVP runs on mock data; run `prisma migrate` to go live.
+//
+// Setup:
+//   1. cp .env.example .env  →  set DATABASE_URL + Supabase keys
+//   2. npx prisma migrate dev --name init
+//   3. npm run db:seed        →  loads mock data into the DB
+//   4. (optional) npm run db:studio  →  browse data at localhost:5555
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ───────────────────────── Enums ─────────────────────────
+
+enum Role {
+  CUSTOMER
+  ADMIN
+}
+
+enum ProductStatus {
+  ACTIVE
+  INACTIVE
+  DRAFT
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  SHIPPING
+  DELIVERED
+  CANCELLED
+}
+
+// ───────────────────────── Users ─────────────────────────
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String // bcrypt hash
+  name      String
+  role      Role     @default(CUSTOMER)
+  cart      Cart?
+  orders    Order[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([email])
+}
+
+// ───────────────────────── Categories ─────────────────────────
+
+model Category {
+  id          String    @id @default(cuid())
+  slug        String    @unique // snacks / beauty / drinks
+  label       String
+  labelTh     String
+  emoji       String
+  description String?
+  descriptionTh String?
+  gradient    String? // tailwind gradient class string for UI
+  products    Product[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([slug])
+}
+
+// ───────────────────────── Products ─────────────────────────
+
+model Product {
+  id             String        @id @default(cuid())
+  name           String
+  nameTh         String
+  description    String        @db.Text
+  descriptionTh  String        @db.Text
+  categoryId     String
+  category       Category      @relation(fields: [categoryId], references: [id])
+  price          Decimal       @db.Decimal(10, 2)
+  originalPrice  Decimal?      @db.Decimal(10, 2)
+  stock          Int           @default(0)
+  imageUrl       String
+  gallery        String[]
+  tags           String[]
+  status         ProductStatus @default(ACTIVE)
+  rating         Float         @default(0)
+  reviewCount    Int           @default(0)
+  reason         String?       @db.Text // 推荐理由 — why a friend recommends it
+  brand          String?       // 品牌
+  isFeatured     Boolean       @default(false) // 推荐商品
+  isHot          Boolean       @default(false) // 热门商品
+  deletedAt      DateTime?     // 软删除时间，null = 未删除
+  orderItems     OrderItem[]
+  cartItems      CartItem[]
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@index([categoryId])
+  @@index([status])
+  @@index([deletedAt])
+  @@index([isFeatured])
+  @@index([isHot])
+}
+
+// ───────────────────────── Cart ─────────────────────────
+// One cart per user (server-side persistence). The MVP uses a client-side
+// Zustand store, but this table is ready for cross-device cart sync.
+
+model Cart {
+  id        String       @id @default(cuid())
+  userId    String       @unique
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items     CartItem[]
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+}
+
+model CartItem {
+  id        String  @id @default(cuid())
+  cartId    String
+  cart      Cart    @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+  quantity  Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([cartId, productId])
+  @@index([cartId])
+  @@index([productId])
+}
+
+// ───────────────────────── Orders ─────────────────────────
+
+model Order {
+  id              String      @id @default(cuid())
+  userId          String
+  user            User        @relation(fields: [userId], references: [id])
+  items           OrderItem[]
+  totalAmount     Decimal     @db.Decimal(10, 2)
+  status          OrderStatus @default(PENDING)
+  customerName    String
+  customerPhone   String
+  customerAddress String      @db.Text
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  @@index([userId])
+  @@index([status])
+}
+
+model OrderItem {
+  id        String  @id @default(cuid())
+  orderId   String
+  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+  name      String // snapshot at purchase time
+  nameTh    String
+  quantity  Int
+  price     Decimal @db.Decimal(10, 2) // snapshot at purchase time
+  imageUrl  String  // snapshot at purchase time
+
+  @@index([orderId])
+  @@index([productId])
+}

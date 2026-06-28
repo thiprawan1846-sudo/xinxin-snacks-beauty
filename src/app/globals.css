@@ -1,0 +1,162 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* shadcn-compatible HSL tokens, mapped to the warm sakura palette */
+    --background: 340 33% 99%; /* #FFF8F3 cream */
+    --foreground: 318 30% 14%; /* #2D1B2E ink */
+
+    --card: 0 0% 100%;
+    --card-foreground: 318 30% 14%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 318 30% 14%;
+
+    --primary: 337 100% 71%; /* #FF6B9D sakura-500 */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 340 50% 96%;
+    --secondary-foreground: 318 30% 14%;
+
+    --muted: 340 30% 96%;
+    --muted-foreground: 320 12% 51%; /* #8B7B8A */
+
+    --accent: 32 100% 71%; /* peach */
+    --accent-foreground: 318 30% 14%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 340 40% 92%;
+    --input: 340 40% 92%;
+    --ring: 337 100% 71%;
+
+    --radius: 1rem;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans;
+    background-image:
+      radial-gradient(at 15% 0%, hsl(340 100% 97%) 0px, transparent 50%),
+      radial-gradient(at 85% 0%, hsl(32 100% 97%) 0px, transparent 45%);
+    background-attachment: fixed;
+    min-height: 100vh;
+  }
+
+  /* Thai text uses the dedicated thai font */
+  :lang(th) {
+    font-family: var(--font-thai), var(--font-sans), system-ui, sans-serif;
+  }
+
+  ::selection {
+    background-color: hsl(337 100% 85%);
+    color: hsl(318 30% 14%);
+  }
+
+  /* Custom scrollbar — pink and soft */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: hsl(340 50% 98%);
+  }
+  ::-webkit-scrollbar-thumb {
+    background: hsl(337 80% 85%);
+    border-radius: 9999px;
+    border: 2px solid hsl(340 50% 98%);
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(337 90% 75%);
+  }
+}
+
+@layer components {
+  .container-x {
+    @apply mx-auto w-full max-w-7xl px-5 sm:px-6 lg:px-8;
+  }
+
+  /* Gradient text for headlines */
+  .text-gradient-sakura {
+    @apply bg-gradient-to-r from-sakura-600 via-sakura-500 to-peach-500 bg-clip-text text-transparent;
+  }
+
+  /* Glass card with pink tint */
+  .glass-pink {
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 169, 197, 0.3);
+  }
+
+  /* Pill button base */
+  .pill {
+    @apply inline-flex items-center justify-center gap-2 rounded-full font-display font-semibold transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50;
+  }
+
+  /* Card hover lift */
+  .lift {
+    @apply transition-all duration-500 ease-out hover:-translate-y-1.5 hover:shadow-float;
+  }
+
+  /* Shimmer skeleton */
+  .shimmer {
+    @apply relative overflow-hidden bg-sakura-50;
+  }
+  .shimmer::after {
+    @apply absolute inset-0 -translate-x-full;
+    content: "";
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(255, 143, 171, 0.15),
+      transparent
+    );
+    animation: shimmer 2s infinite;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .mask-fade-r {
+    mask-image: linear-gradient(to right, black 80%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to right, black 80%, transparent 100%);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+/* Gentle float for decorative product tiles on the login brand wall */
+@keyframes floaty {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-14px);
+  }
+}
