@@ -32,6 +32,14 @@ export default function CartPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (items.length === 0 || !form.name || !form.phone || !form.address) return;
+
+    // Orders table has FK userId -> User.id, so a login is required to place
+    // an order. Guests are redirected to login and come back after auth.
+    if (!user) {
+      router.push(`/login?redirect=${encodeURIComponent("/cart")}`);
+      return;
+    }
+
     setPlacing(true);
 
     try {
@@ -39,7 +47,7 @@ export default function CartPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          userId: user?.id ?? "u_guest",
+          userId: user.id,
           items: items.map((i) => ({
             productId: i.productId,
             name: i.name,
@@ -55,7 +63,8 @@ export default function CartPage() {
       });
 
       if (!res.ok) {
-        throw new Error(`Order API returned ${res.status}`);
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody.error || `Order API returned ${res.status}`);
       }
 
       const { data: order } = await res.json();
