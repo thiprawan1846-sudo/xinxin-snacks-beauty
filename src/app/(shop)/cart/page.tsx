@@ -29,38 +29,49 @@ export default function CartPage() {
   // 全店包邮，不收运费
   const grandTotal = totalAmount();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (items.length === 0 || !form.name || !form.phone || !form.address) return;
     setPlacing(true);
 
-    setTimeout(() => {
-      const orderId = `ORD-2026-${String(Date.now()).slice(-6)}`;
-      createOrder({
-        id: orderId,
-        userId: user?.id ?? "u_guest",
-        items: items.map((i, idx) => ({
-          id: `oi_${idx}_${i.productId}`,
-          productId: i.productId,
-          name: i.name,
-          nameTh: i.nameTh,
-          quantity: i.quantity,
-          price: i.price,
-          imageUrl: i.imageUrl,
-        })),
-        totalAmount: grandTotal,
-        status: "PENDING",
-        customerName: form.name,
-        customerPhone: form.phone,
-        customerAddress: form.address,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
+    try {
+      const res = await fetch("/api/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: user?.id ?? "u_guest",
+          items: items.map((i) => ({
+            productId: i.productId,
+            name: i.name,
+            nameTh: i.nameTh,
+            quantity: i.quantity,
+            price: i.price,
+            imageUrl: i.imageUrl,
+          })),
+          customerName: form.name,
+          customerPhone: form.phone,
+          customerAddress: form.address,
+        }),
       });
-      setPlacing(false);
+
+      if (!res.ok) {
+        throw new Error(`Order API returned ${res.status}`);
+      }
+
+      const { data: order } = await res.json();
+
+      // Persist to local store so /orders/[id] can render immediately,
+      // but the source of truth is now the database row returned by the API.
+      createOrder(order);
       setPlaced(true);
       clear();
-      setTimeout(() => router.push(`/orders/${orderId}`), 1200);
-    }, 900);
+      setTimeout(() => router.push(`/orders/${order.id}`), 1200);
+    } catch (err) {
+      console.error("Place order failed:", err);
+      alert("สั่งซื้อไม่สำเร็จ กรุณาลองอีกครั้ง");
+    } finally {
+      setPlacing(false);
+    }
   };
 
   // Empty cart state
