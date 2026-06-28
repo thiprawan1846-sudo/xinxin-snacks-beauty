@@ -10,6 +10,9 @@ import { ProductCard } from "@/components/shop/product-card";
 import { AddToCartSection } from "@/components/shop/add-to-cart-section";
 import { SectionHeading } from "@/components/shop/section-heading";
 
+// ISR: keep product details (price/stock) fresh.
+export const revalidate = 60;
+
 interface PageProps {
   params: Promise<{ id: string }>;
 }

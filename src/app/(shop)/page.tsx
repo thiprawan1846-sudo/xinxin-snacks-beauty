@@ -11,6 +11,9 @@ import {
   getProductsByCategory,
 } from "@/lib/db";
 
+// ISR: revalidate every 60s so new products show up without a full redeploy.
+export const revalidate = 60;
+
 export default async function HomePage() {
   const [categories, featured, newArrivals, snacks, beauty, drinks] =
     await Promise.all([

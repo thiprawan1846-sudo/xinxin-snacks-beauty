@@ -3,6 +3,9 @@ import type { Metadata } from "next";
 import { LoginForm } from "@/components/auth/login-form";
 import { getFeaturedProducts } from "@/lib/db";
 
+// ISR: keep the featured-product collage in sync with homepage.
+export const revalidate = 60;
+
 export const metadata: Metadata = {
   title: "เข้าสู่ระบบ · XinXin Snacks & Beauty",
   description: "เข้าสู่ระบบหรือสมัครสมาชิกเพื่อช้อปขนมและเครื่องสำอางจากจีน",

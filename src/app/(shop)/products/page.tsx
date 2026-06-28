@@ -7,6 +7,9 @@ import { CATEGORY_LABEL } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 
+// ISR: keep product list fresh after admin adds/edits products.
+export const revalidate = 60;
+
 export const metadata: Metadata = {
   title: "สินค้าทั้งหมด",
   description: "ช้อปขนมและเครื่องสำอางจีนส่งตรงจากจีน ทุกหมวดหมู่",

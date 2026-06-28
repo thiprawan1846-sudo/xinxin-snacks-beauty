@@ -2,6 +2,9 @@ import { getFeaturedProducts } from "@/lib/db";
 import { DashboardHero } from "@/components/admin/dashboard-hero";
 import { AdminDashboardClient } from "@/components/admin/admin-dashboard-client";
 
+// Always render fresh — admin needs real-time data.
+export const revalidate = 0;
+
 /**
  * Admin dashboard (server component).
  * Fetches the featured-product hero images here so this page's collage stays
