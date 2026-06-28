@@ -199,7 +199,7 @@ export default function CartPage() {
               type="submit"
               variant="gradient"
               size="lg"
-              className="w-full"
+              className="w-full [&>*]:pointer-events-none"
               disabled={placing}
             >
               {placing ? (
