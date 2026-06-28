@@ -12,7 +12,8 @@ import { useOrders } from "@/hooks/use-orders";
  *   useHydrate({ orders: true });        // fetches /api/admin/orders
  *   useHydrate({ userOrders: true });    // fetches /api/orders?userId=...
  *
- * Skipped if the store already has data (persisted from localStorage).
+ * Always fetches on mount so the UI reflects the latest database state,
+ * not stale localStorage cache.
  */
 export function useHydrate(options: {
   products?: boolean;
@@ -21,24 +22,22 @@ export function useHydrate(options: {
   userId?: string;
 }) {
   const setProducts = useProducts((s) => s.setProducts);
-  const products = useProducts((s) => s.products);
   const setOrders = useOrders((s) => s.setOrders);
-  const orders = useOrders((s) => s.orders);
 
   useEffect(() => {
-    if (options.products && products.length === 0) {
+    if (options.products) {
       fetch("/api/admin/products")
         .then((r) => r.json())
         .then((d) => d.data && setProducts(d.data))
         .catch(() => {});
     }
-    if (options.orders && orders.length === 0) {
+    if (options.orders) {
       fetch("/api/admin/orders")
         .then((r) => r.json())
         .then((d) => d.data && setOrders(d.data))
         .catch(() => {});
     }
-    if (options.userOrders && orders.length === 0) {
+    if (options.userOrders) {
       const url = options.userId
         ? `/api/orders?userId=${encodeURIComponent(options.userId)}`
         : "/api/orders";

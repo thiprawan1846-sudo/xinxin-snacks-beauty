@@ -15,7 +15,7 @@ import type { Order, OrderStatus } from "@/types";
 export default function AdminOrdersPage() {
   const orders = useOrders((s) => s.orders);
   const setOrders = useOrders((s) => s.setOrders);
-  const updateStatus = useOrders((s) => s.updateStatus);
+  const updateStatusLocal = useOrders((s) => s.updateStatus);
   const [filter, setFilter] = useState<OrderStatus | "ALL">("ALL");
 
   // Admin view must always show every user's orders. The shared `useOrders`
@@ -34,6 +34,16 @@ export default function AdminOrdersPage() {
       cancelled = true;
     };
   }, [setOrders]);
+
+  // Update order status: optimistic local update + API call to persist to DB.
+  const handleUpdateStatus = (id: string, status: OrderStatus) => {
+    updateStatusLocal(id, status);
+    fetch("/api/admin/orders", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, status }),
+    }).catch((err) => console.error("Failed to persist order status:", err));
+  };
 
   const filtered =
     filter === "ALL" ? orders : orders.filter((o) => o.status === filter);
@@ -174,14 +184,14 @@ export default function AdminOrdersPage() {
                 <div className="flex items-center gap-1.5">
                   {nextStatus && (
                     <button
-                      onClick={() => updateStatus(o.id, nextStatus)}
+                      onClick={() => handleUpdateStatus(o.id, nextStatus)}
                       className="rounded-full bg-gradient-to-r from-sakura-500 to-peach-500 px-3 py-1.5 text-xs font-semibold text-white shadow-soft transition-all hover:brightness-105 active:scale-95"
                     >
                       → {ORDER_STATUS_META[nextStatus].labelTh}
                     </button>
                   )}
                   <button
-                    onClick={() => updateStatus(o.id, "CANCELLED")}
+                    onClick={() => handleUpdateStatus(o.id, "CANCELLED")}
                     className="rounded-full bg-rose-50 px-2.5 py-1.5 text-xs font-semibold text-rose-500 transition-colors hover:bg-rose-100"
                     title="ยกเลิก"
                   >

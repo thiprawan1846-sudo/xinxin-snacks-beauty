@@ -1,9 +1,9 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useOrders } from "@/hooks/use-orders";
 import { useAuth } from "@/hooks/use-auth";
-import { useHydrate } from "@/hooks/use-hydrate";
 import { OrderCard } from "@/components/shop/order-card";
 import { Button } from "@/components/ui/button";
 import { ORDER_STATUS_FLOW, ORDER_STATUS_META } from "@/lib/constants";
@@ -11,11 +11,43 @@ import { cn } from "@/lib/utils";
 
 export default function OrdersPage() {
   const user = useAuth((s) => s.user);
-  useHydrate({ userOrders: true, userId: user?.id });
   const allOrders = useOrders((s) => s.orders);
-  // Show only the current user's orders (guests see their own guest orders).
-  const currentUserId = user?.id ?? "u_guest";
+  const setOrders = useOrders((s) => s.setOrders);
+  const [loading, setLoading] = useState(true);
+
+  // Force-fetch the current user's orders on every mount so the list reflects
+  // the database, not stale localStorage cache.
+  useEffect(() => {
+    let cancelled = false;
+    if (!user?.id) {
+      setLoading(false);
+      return;
+    }
+    fetch(`/api/orders?userId=${encodeURIComponent(user.id)}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (!cancelled && d.data) setOrders(d.data);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, setOrders]);
+
+  // Show only the current user's orders.
+  const currentUserId = user?.id ?? "";
   const orders = allOrders.filter((o) => o.userId === currentUserId);
+
+  if (loading) {
+    return (
+      <div className="container-x flex items-center justify-center py-20">
+        <span className="h-8 w-8 animate-spin rounded-full border-2 border-sakura-200 border-t-sakura-500" />
+      </div>
+    );
+  }
 
   if (orders.length === 0) {
     return (

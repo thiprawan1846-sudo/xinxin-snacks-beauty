@@ -1,16 +1,16 @@
 "use client";
 
-import { use } from "react";
+import { use, useState, useEffect } from "react";
 import Link from "next/link";
 import { SafeImage as Image } from "@/components/ui/safe-image";
 import { notFound } from "next/navigation";
 import { ArrowLeft, MapPin, Phone, User } from "lucide-react";
 import { useOrders } from "@/hooks/use-orders";
-import { useHydrate } from "@/hooks/use-hydrate";
 import { formatTHB, formatThaiDate } from "@/lib/utils";
 import { ORDER_STATUS_FLOW, ORDER_STATUS_META } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import type { Order } from "@/types";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -18,8 +18,43 @@ interface PageProps {
 
 export default function OrderDetailPage({ params }: PageProps) {
   const { id } = use(params);
-  useHydrate({ userOrders: true });
-  const order = useOrders((s) => s.orders.find((o) => o.id === id));
+  const storeOrder = useOrders((s) => s.orders.find((o) => o.id === id));
+  const createOrder = useOrders((s) => s.create);
+  const [order, setOrder] = useState<Order | undefined>(storeOrder);
+  const [loading, setLoading] = useState(!storeOrder);
+
+  // Always fetch the single order from the API so the page works even after a
+  // hard refresh (when localStorage may not have this order cached).
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/orders/${id}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (cancelled) return;
+        if (d.data) {
+          setOrder(d.data);
+          // Keep the store in sync so /orders list shows it too.
+          createOrder(d.data);
+        } else {
+          setOrder(undefined);
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [id, createOrder]);
+
+  if (loading) {
+    return (
+      <div className="container-x flex items-center justify-center py-20">
+        <span className="h-8 w-8 animate-spin rounded-full border-2 border-sakura-200 border-t-sakura-500" />
+      </div>
+    );
+  }
 
   if (!order) notFound();
 
