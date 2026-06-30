@@ -40,14 +40,21 @@ export interface Product {
   id: string;
   name: string;
   nameTh: string;
+  /** 友好英文名（可选，用于详情页显示）。区别于 name（后台管理用英文标识）。 */
+  englishName?: string | null;
   description: string;
   descriptionTh: string;
   category: Exclude<Category, "all">;
   price: number;
   originalPrice?: number;
   stock: number;
+  /** 封面图（gallery 第一张；旧数据兼容字段） */
   imageUrl: string;
-  gallery?: string[];
+  /** 多图数组（第一张为封面）。null/空 = 仅 imageUrl 一张。 */
+  gallery?: string[] | null;
+  /** 美妆自定义规格（管理员自由新增的 string 数组，例：["04 乌龙冻","03 蔷薇冻"]）。
+   *  非美妆分类或无规格时为 null/空。 */
+  options?: string[] | null;
   tags: string[];
   status: ProductStatus;
   rating: number;
@@ -67,6 +74,8 @@ export interface CartItem {
   productId: string;
   name: string;
   nameTh: string;
+  /** 英文名快照（订单/购物车显示用） */
+  englishName?: string | null;
   price: number;
   imageUrl: string;
   quantity: number;
@@ -75,6 +84,8 @@ export interface CartItem {
   variantId?: string | null;
   size?: ProductSize | null;
   color?: ProductColor | null;
+  /** 美妆自定义规格快照（用户选中的 option 字符串） */
+  optionLabel?: string | null;
 }
 
 export type OrderStatus =
@@ -89,6 +100,8 @@ export interface OrderItem {
   productId: string;
   name: string;
   nameTh: string;
+  /** 英文名快照（订单显示用） */
+  englishName?: string | null;
   quantity: number;
   price: number;
   imageUrl: string;
@@ -96,6 +109,8 @@ export interface OrderItem {
   variantId?: string | null;
   size?: ProductSize | null;
   color?: ProductColor | null;
+  /** 美妆自定义规格快照（用户选中的 option 字符串） */
+  optionLabel?: string | null;
 }
 
 export interface Order {

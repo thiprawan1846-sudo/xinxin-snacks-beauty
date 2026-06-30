@@ -1,16 +1,25 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { X, Loader2, Save } from "lucide-react";
+import {
+  X,
+  Loader2,
+  Save,
+  Plus,
+  Trash2,
+  ArrowLeft,
+  ArrowRight,
+  Upload,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ImageInput } from "@/components/admin/image-input";
 import { cn } from "@/lib/utils";
 import {
   PRODUCT_SIZES,
   PRODUCT_COLORS,
   COLOR_META,
   categoryHasVariants,
+  categoryHasOptions,
 } from "@/lib/constants";
 import type {
   Product,
@@ -33,29 +42,37 @@ interface VariantDraft {
 interface FormState {
   name: string;
   nameTh: string;
+  englishName: string; // 可选友好英文名（区别于 name 后台英文标识）
   description: string;
   descriptionTh: string;
   category: CategorySlug;
   brand: string;
   price: string;
   stock: string;
-  imageUrl: string;
+  imageUrl: string; // 兼容字段，与 gallery[0] 同步
+  gallery: string[]; // 多图数组，第一张为封面
+  options: string[]; // 美妆自定义规格（仅 beauty 分类启用）
   status: ProductStatus;
   isFeatured: boolean;
   isHot: boolean;
 }
 
 function toForm(p: Product | null): FormState {
+  const gallery =
+    p?.gallery && p.gallery.length > 0 ? p.gallery : p?.imageUrl ? [p.imageUrl] : [];
   return {
     name: p?.name ?? "",
     nameTh: p?.nameTh ?? "",
+    englishName: p?.englishName ?? "",
     description: p?.description ?? "",
     descriptionTh: p?.descriptionTh ?? "",
     category: (p?.category as CategorySlug) ?? "snacks",
     brand: p?.brand ?? "",
     price: p ? String(p.price) : "",
     stock: p ? String(p.stock) : "",
-    imageUrl: p?.imageUrl ?? "",
+    imageUrl: gallery[0] ?? "",
+    gallery,
+    options: Array.isArray(p?.options) ? [...p!.options!] : [],
     status: p?.status ?? "ACTIVE",
     isFeatured: p?.isFeatured ?? false,
     isHot: p?.isHot ?? false,
@@ -87,6 +104,7 @@ export function ProductDrawer({ open, product, onClose, onSaved }: Props) {
   const [variantsLoaded, setVariantsLoaded] = useState(false);
 
   const isClothing = categoryHasVariants(form.category);
+  const isBeauty = categoryHasOptions(form.category);
 
   // Reset form whenever the drawer opens or the target product changes.
   useEffect(() => {
@@ -106,6 +124,52 @@ export function ProductDrawer({ open, product, onClose, onSaved }: Props) {
       }
     }
   }, [open, product]);
+
+  function validate(): string | null {
+    if (!form.nameTh.trim()) return "请填写商品名称（泰文）";
+    if (!form.name.trim()) return "请填写商品名称（英文）";
+    if (!form.price || Number(form.price) < 0) return "请填写有效的价格";
+    // 至少 1 张商品图片（必填）
+    if (form.gallery.length === 0) return "请至少上传 1 张商品图片";
+
+    // 服饰商品：校验 variants
+    if (isClothing) {
+      if (selectedSizes.length === 0) return "服饰商品请至少选择一个尺码";
+      if (selectedColors.length === 0) return "服饰商品请至少选择一个颜色";
+
+      const hasVariant = selectedSizes.length > 0 && selectedColors.length > 0;
+      if (!hasVariant) return "请至少添加一个SKU";
+
+      let hasStock = false;
+      for (const size of selectedSizes) {
+        for (const color of selectedColors) {
+          const draft = variantDrafts[skuKey(size, color)];
+          const stock = draft ? Math.max(0, Math.floor(Number(draft.stock) || 0)) : 0;
+          if (stock > 0) {
+            hasStock = true;
+            break;
+          }
+        }
+        if (hasStock) break;
+      }
+      if (!hasStock) return "请填写SKU库存";
+    } else {
+      if (form.stock === "" || Number(form.stock) < 0) return "请填写有效的库存";
+    }
+
+    // 美妆自定义规格：可空；若有值，不允许重复或空白
+    if (isBeauty) {
+      const seen = new Set<string>();
+      for (const o of form.options) {
+        const trimmed = o.trim();
+        if (!trimmed) return "美妆规格不能为空";
+        if (seen.has(trimmed)) return `美妆规格重复：${trimmed}`;
+        seen.add(trimmed);
+      }
+    }
+
+    return null;
+  }
 
   async function loadVariants(productId: string) {
     try {
@@ -152,43 +216,6 @@ export function ProductDrawer({ open, product, onClose, onSaved }: Props) {
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) =>
     setForm((f) => ({ ...f, [k]: v }));
 
-  function validate(): string | null {
-    if (!form.nameTh.trim()) return "请填写商品名称（泰文）";
-    if (!form.name.trim()) return "请填写商品名称（英文）";
-    if (!form.price || Number(form.price) < 0) return "请填写有效的价格";
-    if (!form.imageUrl.trim()) return "请上传或填写商品图片";
-
-    // 服饰商品：校验 variants
-    if (isClothing) {
-      if (selectedSizes.length === 0) return "服饰商品请至少选择一个尺码";
-      if (selectedColors.length === 0) return "服饰商品请至少选择一个颜色";
-
-      // 检查是否至少有一个 variant
-      const hasVariant = selectedSizes.length > 0 && selectedColors.length > 0;
-      if (!hasVariant) return "请至少添加一个SKU";
-
-      // 检查是否至少有一个 variant 库存 > 0
-      let hasStock = false;
-      for (const size of selectedSizes) {
-        for (const color of selectedColors) {
-          const draft = variantDrafts[skuKey(size, color)];
-          const stock = draft ? Math.max(0, Math.floor(Number(draft.stock) || 0)) : 0;
-          if (stock > 0) {
-            hasStock = true;
-            break;
-          }
-        }
-        if (hasStock) break;
-      }
-      if (!hasStock) return "请填写SKU库存";
-    } else {
-      // 普通商品：校验 form.stock
-      if (form.stock === "" || Number(form.stock) < 0) return "请填写有效的库存";
-    }
-
-    return null;
-  }
-
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     const v = validate();
@@ -209,13 +236,19 @@ export function ProductDrawer({ open, product, onClose, onSaved }: Props) {
     const payload = {
       name: form.name.trim(),
       nameTh: form.nameTh.trim(),
+      englishName: form.englishName.trim() || null,
       description: form.description.trim(),
       descriptionTh: form.descriptionTh.trim() || form.description.trim(),
       category: form.category,
       brand: form.brand.trim() || undefined,
       price: Number(form.price),
       stock: totalStock,
-      imageUrl: form.imageUrl.trim(),
+      imageUrl: form.gallery[0] ?? form.imageUrl.trim(),
+      gallery: form.gallery,
+      // 美妆自定义规格：保存时去除空白项；非美妆分类传 null 清空
+      options: isBeauty
+        ? form.options.map((o) => o.trim()).filter(Boolean)
+        : null,
       status: form.status,
       isFeatured: form.isFeatured,
       isHot: form.isHot,
@@ -352,6 +385,18 @@ export function ProductDrawer({ open, product, onClose, onSaved }: Props) {
               </Field>
             </div>
 
+            {/* 友好英文名（可选）：仅用于前台显示，区别于后台 name 字段 */}
+            <Field
+              label="商品英文名（可选，前台显示）"
+              hint="留空不影响发布"
+            >
+              <Input
+                value={form.englishName}
+                onChange={(e) => set("englishName", e.target.value)}
+                placeholder="e.g. Florasis Lipstick · 04 Oolong"
+              />
+            </Field>
+
             <div className="grid grid-cols-2 gap-3">
               <Field label="商品分类" required>
                 <SelectInput
@@ -426,12 +471,31 @@ export function ProductDrawer({ open, product, onClose, onSaved }: Props) {
               </Field>
             </div>
 
-            <Field label="商品图片" required>
-              <ImageInput
-                value={form.imageUrl}
-                onChange={(url) => set("imageUrl", url)}
+            <Field
+              label={`商品图片（至少 1 张，最多 10 张）`}
+              required
+              hint="第一张为封面图，可拖拽排序"
+            >
+              <MultiImageUpload
+                images={form.gallery}
+                onChange={(urls) => {
+                  setForm((f) => ({
+                    ...f,
+                    gallery: urls,
+                    imageUrl: urls[0] ?? f.imageUrl,
+                  }));
+                }}
+                maxFiles={10}
               />
             </Field>
+
+            {/* ───────── 美妆自定义规格（仅 beauty 分类） ───────── */}
+            {isBeauty && (
+              <BeautyOptionsEditor
+                options={form.options}
+                onChange={(opts) => set("options", opts)}
+              />
+            )}
 
             {/* ───────── 服饰规格编辑器 ───────── */}
             {isClothing && (
@@ -532,6 +596,256 @@ export function ProductDrawer({ open, product, onClose, onSaved }: Props) {
         </form>
       </aside>
     </>
+  );
+}
+
+// ───────────────────── Multi-Image Upload ─────────────────────
+
+/**
+ * 多图上传组件：
+ * - 至少 1 张，最多 maxFiles 张
+ * - 第一张为封面（带徽标）
+ * - 支持左/右移动调整顺序（移动端友好的按钮式排序，避免依赖 HTML5 DnD）
+ * - 支持删除（同步调用 /api/admin/upload 删除 Supabase Storage 对象）
+ */
+function MultiImageUpload({
+  images,
+  onChange,
+  maxFiles = 10,
+}: {
+  images: string[];
+  onChange: (urls: string[]) => void;
+  maxFiles?: number;
+}) {
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleFiles(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    setError(null);
+    const remaining = maxFiles - images.length;
+    if (remaining <= 0) {
+      setError(`最多只能上传 ${maxFiles} 张图片`);
+      return;
+    }
+    const toUpload = Array.from(files).slice(0, remaining);
+    setUploading(true);
+    try {
+      const uploaded: string[] = [];
+      for (const file of toUpload) {
+        const fd = new FormData();
+        fd.append("file", file);
+        const res = await fetch("/api/admin/upload", { method: "POST", body: fd });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error ?? "上传失败");
+        uploaded.push(json.data.url as string);
+      }
+      onChange([...images, ...uploaded]);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "上传失败");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function handleDelete(url: string, index: number) {
+    // 先从本地移除，再调用 Storage 删除（即使 Storage 删除失败也不阻塞 UI）
+    const next = images.filter((_, i) => i !== index);
+    onChange(next);
+    try {
+      const u = new URLSearchParams({ url });
+      await fetch(`/api/admin/upload?${u.toString()}`, { method: "DELETE" });
+    } catch {
+      // ignore — UI 已更新
+    }
+  }
+
+  function move(from: number, to: number) {
+    if (to < 0 || to >= images.length) return;
+    const next = [...images];
+    const [item] = next.splice(from, 1);
+    next.splice(to, 0, item);
+    onChange(next);
+  }
+
+  return (
+    <div className="space-y-3">
+      {/* 现有图片网格 */}
+      {images.length > 0 && (
+        <div className="grid grid-cols-3 gap-2">
+          {images.map((url, idx) => (
+            <div
+              key={url + idx}
+              className="group relative aspect-square overflow-hidden rounded-xl border border-sakura-200 bg-sakura-50"
+            >
+              <img
+                src={url}
+                alt={`product-${idx + 1}`}
+                className="h-full w-full object-cover"
+              />
+              {/* 封面徽标 */}
+              {idx === 0 && (
+                <span className="absolute left-1 top-1 rounded-full bg-sakura-500 px-1.5 py-0.5 text-[10px] font-semibold text-white shadow-soft">
+                  封面
+                </span>
+              )}
+              {/* 操作按钮 */}
+              <div className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-ink/40 px-1 py-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+                <div className="flex gap-0.5">
+                  <button
+                    type="button"
+                    onClick={() => move(idx, idx - 1)}
+                    disabled={idx === 0}
+                    className="grid h-6 w-6 place-items-center rounded bg-white/80 text-ink disabled:opacity-30"
+                    aria-label="左移"
+                  >
+                    <ArrowLeft className="h-3 w-3" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => move(idx, idx + 1)}
+                    disabled={idx === images.length - 1}
+                    className="grid h-6 w-6 place-items-center rounded bg-white/80 text-ink disabled:opacity-30"
+                    aria-label="右移"
+                  >
+                    <ArrowRight className="h-3 w-3" />
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleDelete(url, idx)}
+                  className="grid h-6 w-6 place-items-center rounded bg-rose-500/90 text-white"
+                  aria-label="删除"
+                >
+                  <Trash2 className="h-3 w-3" />
+                </button>
+              </div>
+              {/* 序号 */}
+              <span className="absolute right-1 top-1 rounded-full bg-ink/60 px-1.5 py-0.5 text-[10px] font-medium text-white">
+                {idx + 1}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* 上传按钮 */}
+      {images.length < maxFiles && (
+        <label className="flex cursor-pointer flex-col items-center justify-center gap-1 rounded-2xl border-2 border-dashed border-sakura-200 bg-sakura-50/40 px-4 py-5 text-center transition-colors hover:border-sakura-400 hover:bg-sakura-50">
+          {uploading ? (
+            <Loader2 className="h-5 w-5 animate-spin text-sakura-500" />
+          ) : (
+            <Upload className="h-5 w-5 text-sakura-500" />
+          )}
+          <span className="text-xs font-medium text-ink-soft">
+            {uploading ? "上传中..." : "点击或拖拽上传图片"}
+          </span>
+          <span className="text-[10px] text-ink-muted">
+            支持 JPG/PNG/WebP/GIF，单张 ≤ 4MB
+          </span>
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/gif"
+            multiple
+            className="hidden"
+            onChange={(e) => handleFiles(e.target.files)}
+          />
+        </label>
+      )}
+
+      {error && <p className="text-xs text-rose-600">{error}</p>}
+      <p className="text-[11px] text-ink-muted">
+        已上传 {images.length}/{maxFiles} · 第一张自动作为封面与列表展示图
+      </p>
+    </div>
+  );
+}
+
+// ───────────────────── Beauty Options Editor ─────────────────────
+
+/**
+ * 美妆自定义规格编辑器：
+ * - 管理员可自由新增/删除/修改任意规格字符串
+ * - 不预设任何固定内容
+ * - 支持无限个（实际受 UI 性能限制）
+ * - 每个选项都是独立数据
+ */
+function BeautyOptionsEditor({
+  options,
+  onChange,
+}: {
+  options: string[];
+  onChange: (opts: string[]) => void;
+}) {
+  function update(idx: number, value: string) {
+    const next = [...options];
+    next[idx] = value;
+    onChange(next);
+  }
+  function remove(idx: number) {
+    onChange(options.filter((_, i) => i !== idx));
+  }
+  function add() {
+    onChange([...options, ""]);
+  }
+
+  return (
+    <div className="space-y-3 rounded-2xl border border-sakura-200 bg-sakura-50/40 p-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="text-sm">💄</span>
+          <span className="text-sm font-semibold text-ink">自定义规格（Options）</span>
+        </div>
+        <span className="text-[11px] text-ink-muted">
+          可选 · {options.length} 个
+        </span>
+      </div>
+
+      <p className="text-[11px] text-ink-muted">
+        例：口红可填「04 乌龙冻」「03 蔷薇冻」「05 奶杏色」。前台将显示为可点选的规格列表，用户必须选择后才能加入购物车。
+      </p>
+
+      {options.length > 0 && (
+        <div className="space-y-2">
+          {options.map((opt, idx) => (
+            <div key={idx} className="flex items-center gap-2">
+              <span className="grid h-8 w-8 flex-shrink-0 place-items-center rounded-full bg-white text-xs font-semibold text-sakura-500 ring-1 ring-inset ring-sakura-200">
+                {idx + 1}
+              </span>
+              <Input
+                value={opt}
+                onChange={(e) => update(idx, e.target.value)}
+                placeholder="如 04 乌龙冻"
+                className="flex-1"
+              />
+              <button
+                type="button"
+                onClick={() => remove(idx)}
+                className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-full text-rose-500 transition-colors hover:bg-rose-50"
+                aria-label="删除该规格"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <button
+        type="button"
+        onClick={add}
+        className="flex w-full items-center justify-center gap-1.5 rounded-2xl border-2 border-dashed border-sakura-200 bg-white/60 py-2.5 text-sm font-medium text-sakura-600 transition-colors hover:border-sakura-400 hover:bg-sakura-50"
+      >
+        <Plus className="h-4 w-4" />
+        添加规格
+      </button>
+
+      {options.length === 0 && (
+        <p className="text-center text-[11px] text-ink-muted">
+          未添加规格 → 前台不显示规格选择模块，用户可直接加购
+        </p>
+      )}
+    </div>
   );
 }
 

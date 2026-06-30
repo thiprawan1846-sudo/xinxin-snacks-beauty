@@ -29,12 +29,15 @@ export async function PATCH(
   const allowed: string[] = [
     "name",
     "nameTh",
+    "englishName",
     "description",
     "descriptionTh",
     "price",
     "originalPrice",
     "stock",
     "imageUrl",
+    "gallery",
+    "options",
     "tags",
     "reason",
     "brand",
@@ -47,7 +50,6 @@ export async function PATCH(
   if (body.status !== undefined) {
     data.status = body.status as ProductStatus;
   }
-
   const product = await updateProduct(id, data);
   if (!product) {
     return NextResponse.json({ error: "Product not found" }, { status: 404 });

@@ -168,15 +168,19 @@ export default function AdminOrdersPage() {
                   )}
                 </div>
                 {/* 规格摘要，便于发货核对 */}
-                {(o.items.some((i) => i.color || i.size)) && (
+                {o.items.some((i) => i.color || i.size || i.optionLabel) && (
                   <div className="flex flex-wrap gap-1">
                     {o.items.slice(0, 3).map((item) =>
-                      item.size || item.color ? (
+                      item.size || item.color || item.optionLabel ? (
                         <span
                           key={item.id}
                           className="rounded-full bg-sakura-50 px-1.5 py-0.5 text-[10px] text-ink-soft"
                         >
-                          {[item.color, item.size && `ไซส์ ${item.size}`]
+                          {[
+                            item.color,
+                            item.size && `ไซส์ ${item.size}`,
+                            item.optionLabel,
+                          ]
                             .filter(Boolean)
                             .join(" · ")}
                         </span>

@@ -28,6 +28,13 @@ export function AddToCartSection({ product }: AddToCartSectionProps) {
   const [selectedSize, setSelectedSize] = useState<ProductSize | null>(null);
   const [touched, setTouched] = useState(false);
 
+  // 美妆自定义规格选择状态：仅当 product.options 非空数组时启用
+  const hasBeautyOptions =
+    product.category === "beauty" &&
+    Array.isArray(product.options) &&
+    product.options.length > 0;
+  const [selectedOption, setSelectedOption] = useState<string | null>(null);
+
   // 从 variants 反推可选的 color / size（只展示有 SKU 的）
   const availableColors = useMemo<ProductColor[]>(() => {
     if (!product.variants) return [];
@@ -86,7 +93,9 @@ export function AddToCartSection({ product }: AddToCartSectionProps) {
       : 0
     : product.stock;
 
-  const needSelect = isClothing && (!selectedColor || !selectedSize);
+  const needSelect =
+    (isClothing && (!selectedColor || !selectedSize)) ||
+    (hasBeautyOptions && !selectedOption);
   const soldOut = !isClothing
     ? product.stock <= 0
     : availableColors.length === 0 || availableSizes.length === 0;
@@ -106,6 +115,8 @@ export function AddToCartSection({ product }: AddToCartSectionProps) {
         size: selectedVariant.size,
         color: selectedVariant.color,
       });
+    } else if (hasBeautyOptions && selectedOption) {
+      add(product, qty, { optionLabel: selectedOption });
     } else {
       add(product, qty);
     }
@@ -218,6 +229,59 @@ export function AddToCartSection({ product }: AddToCartSectionProps) {
         </p>
       )}
 
+      {/* 美妆自定义规格：仅当 product.options 非空时显示，必须选择后才能加购 */}
+      {hasBeautyOptions && (
+        <div>
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-sm font-medium text-ink-soft">
+              กรุณาเลือกข้อมูลสินค้า <span className="text-rose-500">*</span>
+              <span className="ml-1 text-xs text-ink-muted">请选择规格</span>
+            </span>
+            {selectedOption && (
+              <span className="text-xs text-sakura-600">{selectedOption}</span>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {(product.options ?? []).map((option) => {
+              const active = selectedOption === option;
+              return (
+                <button
+                  key={option}
+                  type="button"
+                  onClick={() => setSelectedOption(option)}
+                  className={cn(
+                    "flex h-11 items-center gap-2 rounded-2xl border-2 px-4 text-sm font-medium transition-all active:scale-95",
+                    "hover:shadow-soft",
+                    active
+                      ? "border-sakura-400 bg-sakura-50 text-sakura-700 shadow-soft"
+                      : "border-sakura-100 bg-white text-ink-soft",
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "grid h-4 w-4 place-items-center rounded-full border-2",
+                      active
+                        ? "border-sakura-500 bg-sakura-500"
+                        : "border-sakura-200",
+                    )}
+                  >
+                    {active && <Check className="h-2.5 w-2.5 text-white" />}
+                  </span>
+                  <span>{option}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* 美妆规格未选提示 */}
+      {hasBeautyOptions && touched && !selectedOption && (
+        <p className="rounded-2xl bg-rose-50 px-4 py-2 text-xs font-medium text-rose-500">
+          กรุณาเลือกข้อมูลสินค้าก่อนเพิ่มลงตะกร้า
+        </p>
+      )}
+
       {/* 数量 */}
       <div className="flex items-center gap-3">
         <span className="text-sm font-medium text-ink-soft">จำนวน</span>
@@ -275,7 +339,7 @@ export function AddToCartSection({ product }: AddToCartSectionProps) {
           ) : needSelect ? (
             <>
               <ShoppingBag className="h-5 w-5" />
-              เลือกสีและไซส์
+              {hasBeautyOptions ? "เลือกข้อมูลสินค้า" : "เลือกสีและไซส์"}
             </>
           ) : (
             <>

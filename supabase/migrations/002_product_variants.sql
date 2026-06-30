@@ -28,40 +28,18 @@ CREATE INDEX IF NOT EXISTS "ProductVariant_productId_idx"
 CREATE UNIQUE INDEX IF NOT EXISTS "ProductVariant_productId_size_color_key"
     ON "ProductVariant"("productId", "size", "color");
 
--- 外键（同商品删除时连带删除 SKU）
-DO $$
-BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint WHERE conname = 'ProductVariant_productId_fkey'
-    ) THEN
-        ALTER TABLE "ProductVariant"
-            ADD CONSTRAINT "ProductVariant_productId_fkey"
-            FOREIGN KEY ("productId") REFERENCES "Product"("id")
-            ON DELETE CASCADE ON UPDATE CASCADE;
-    END IF;
-END $$;
-
--- ── 2. CartItem 规格列 ──────────────────────────────────────
+-- ── 2. CartItem 增加 variant 列 ─────────────────────────────
 ALTER TABLE "CartItem" ADD COLUMN IF NOT EXISTS "variantId" TEXT;
 ALTER TABLE "CartItem" ADD COLUMN IF NOT EXISTS "size" TEXT;
 ALTER TABLE "CartItem" ADD COLUMN IF NOT EXISTS "color" TEXT;
 
--- 放宽原唯一约束 (cartId, productId)：同一商品不同 SKU 可同时入购物车
--- 改为 (cartId, productId, COALESCE(variantId, ''))
-DROP INDEX IF EXISTS "CartItem_cartId_productId_key";
-CREATE UNIQUE INDEX IF NOT EXISTS "CartItem_cartId_productId_variant_key"
-    ON "CartItem"("cartId", "productId", COALESCE("variantId", ''));
-
--- ── 3. OrderItem 规格列（订单快照） ─────────────────────────
+-- ── 3. OrderItem 增加 variant 列（订单快照） ────────────────
 ALTER TABLE "OrderItem" ADD COLUMN IF NOT EXISTS "variantId" TEXT;
 ALTER TABLE "OrderItem" ADD COLUMN IF NOT EXISTS "size" TEXT;
 ALTER TABLE "OrderItem" ADD COLUMN IF NOT EXISTS "color" TEXT;
 
--- ── 4. (可选) clothing 分类 ─────────────────────────────────
--- 通过 REST/seed 插入，这里不强制；保留 idempotent 占位注释。
-INSERT INTO "Category" ("id", "slug", "label", "labelTh", "emoji", "description", "descriptionTh", "gradient", "createdAt", "updatedAt")
-SELECT 'cat_clothing', 'clothing', 'Clothing', 'เสื้อผ้า', '👕',
-       'Cross-border trending apparel', 'เสื้อผ้าแฟชั่นข้ามแดน',
-       'from-sakura-300 to-sakura-500',
-       NOW(), NOW()
-WHERE NOT EXISTS (SELECT 1 FROM "Category" WHERE "slug" = 'clothing');
+-- ── 4. 放宽 CartItem 唯一约束 ───────────────────────────────
+-- 旧约束：(cartId, productId) 唯一 → 同一商品只能一行
+-- 新策略：允许同一商品多行（不同 SKU 各占一行）。
+-- 如果你的 DB 上有名为 CartItem_cartId_productId_key 的唯一约束，删除它：
+ALTER TABLE "CartItem" DROP CONSTRAINT IF EXISTS "CartItem_cartId_productId_key";

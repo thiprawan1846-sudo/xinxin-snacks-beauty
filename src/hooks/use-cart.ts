@@ -12,10 +12,20 @@ interface CartState {
   add: (
     product: Product,
     qty?: number,
-    variant?: { id: string; size?: ProductSize | null; color?: ProductColor | null },
+    variant?: {
+      id?: string | null;
+      size?: ProductSize | null;
+      color?: ProductColor | null;
+      optionLabel?: string | null;
+    },
   ) => void;
-  remove: (productId: string, variantId?: string | null) => void;
-  updateQty: (productId: string, qty: number, variantId?: string | null) => void;
+  remove: (productId: string, variantId?: string | null, optionLabel?: string | null) => void;
+  updateQty: (
+    productId: string,
+    qty: number,
+    variantId?: string | null,
+    optionLabel?: string | null,
+  ) => void;
   clear: () => void;
   setOpen: (open: boolean) => void;
   /** Replace local items with the server-side cart. Called after login/mount. */
@@ -24,9 +34,20 @@ interface CartState {
   totalAmount: () => number;
 }
 
-/** 购物车行的唯一 key：productId + variantId（同一商品不同 SKU 各占一行）。 */
-function cartKey(productId: string, variantId?: string | null): string {
-  return variantId ? `${productId}__${variantId}` : productId;
+/**
+ * 购物车行的唯一 key：
+ * - 服饰：productId + variantId
+ * - 美妆：productId + optionLabel
+ * - 普通：productId
+ */
+function cartKey(
+  productId: string,
+  variantId?: string | null,
+  optionLabel?: string | null,
+): string {
+  if (variantId) return `${productId}__v:${variantId}`;
+  if (optionLabel) return `${productId}__o:${optionLabel}`;
+  return productId;
 }
 
 /** Push the current items array to the server. No-op for guests. */
@@ -42,6 +63,7 @@ async function syncToServer(items: CartItem[]) {
           variantId: i.variantId ?? null,
           size: i.size ?? null,
           color: i.color ?? null,
+          optionLabel: i.optionLabel ?? null,
         })),
       }),
     });
@@ -60,17 +82,26 @@ export const useCart = create<CartState>()(
       add: (product, qty = 1, variant) =>
         set((state) => {
           const vId = variant?.id ?? null;
-          const key = cartKey(product.id, vId);
+          const vOption = variant?.optionLabel ?? null;
+          const key = cartKey(product.id, vId, vOption);
           // 服饰 SKU 库存；非服饰沿用 Product.stock
-          const stock = variant ? variantStock(product, vId) : product.stock;
+          const stock = variant?.id ? variantStock(product, vId) : product.stock;
           const clampedQty = Math.min(qty, stock);
           if (clampedQty <= 0) return state;
 
-          const existing = state.items.find((i) => cartKey(i.productId, i.variantId) === key);
+          // 封面图：gallery[0] ?? imageUrl
+          const cover =
+            product.gallery && product.gallery.length > 0
+              ? product.gallery[0]
+              : product.imageUrl;
+
+          const existing = state.items.find(
+            (i) => cartKey(i.productId, i.variantId, i.optionLabel) === key,
+          );
           let items: CartItem[];
           if (existing) {
             items = state.items.map((i) =>
-              cartKey(i.productId, i.variantId) === key
+              cartKey(i.productId, i.variantId, i.optionLabel) === key
                 ? { ...i, quantity: Math.min(i.quantity + qty, stock) }
                 : i,
             );
@@ -81,13 +112,15 @@ export const useCart = create<CartState>()(
                 productId: product.id,
                 name: product.name,
                 nameTh: product.nameTh,
+                englishName: product.englishName ?? null,
                 price: product.price,
-                imageUrl: product.imageUrl,
+                imageUrl: cover,
                 quantity: clampedQty,
                 stock,
                 variantId: vId,
                 size: variant?.size ?? null,
                 color: variant?.color ?? null,
+                optionLabel: vOption,
               },
             ];
           }
@@ -95,21 +128,21 @@ export const useCart = create<CartState>()(
           return { items, isOpen: true };
         }),
 
-      remove: (productId, variantId) =>
+      remove: (productId, variantId, optionLabel) =>
         set((state) => {
-          const key = cartKey(productId, variantId);
+          const key = cartKey(productId, variantId, optionLabel);
           const items = state.items.filter(
-            (i) => cartKey(i.productId, i.variantId) !== key,
+            (i) => cartKey(i.productId, i.variantId, i.optionLabel) !== key,
           );
           void syncToServer(items);
           return { items };
         }),
 
-      updateQty: (productId, qty, variantId) =>
+      updateQty: (productId, qty, variantId, optionLabel) =>
         set((state) => {
-          const key = cartKey(productId, variantId);
+          const key = cartKey(productId, variantId, optionLabel);
           const items = state.items.map((i) =>
-            cartKey(i.productId, i.variantId) === key
+            cartKey(i.productId, i.variantId, i.optionLabel) === key
               ? { ...i, quantity: Math.max(1, Math.min(qty, i.stock)) }
               : i,
           );
@@ -135,10 +168,11 @@ export const useCart = create<CartState>()(
             // so a guest's pre-login cart isn't silently dropped.
             const local = get().items;
             const serverKeys = new Set(
-              serverItems.map((i) => cartKey(i.productId, i.variantId)),
+              serverItems.map((i) => cartKey(i.productId, i.variantId, i.optionLabel)),
             );
             const localOnly = local.filter(
-              (i) => !serverKeys.has(cartKey(i.productId, i.variantId)),
+              (i) =>
+                !serverKeys.has(cartKey(i.productId, i.variantId, i.optionLabel)),
             );
             const merged =
               localOnly.length > 0 ? [...serverItems, ...localOnly] : serverItems;

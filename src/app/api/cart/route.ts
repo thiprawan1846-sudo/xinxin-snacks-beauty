@@ -42,6 +42,7 @@ export async function PUT(request: Request) {
       variantId?: string | null;
       size?: string | null;
       color?: string | null;
+      optionLabel?: string | null;
     }[];
   };
   const items = Array.isArray(body.items) ? body.items : [];
@@ -53,6 +54,7 @@ export async function PUT(request: Request) {
       variantId: i.variantId ?? null,
       size: (i.size as ProductSize | null | undefined) ?? null,
       color: (i.color as ProductColor | null | undefined) ?? null,
+      optionLabel: i.optionLabel ?? null,
     })),
   );
   return NextResponse.json({ data: { ok: true } });

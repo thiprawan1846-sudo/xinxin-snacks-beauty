@@ -37,22 +37,26 @@ export async function POST(request: Request) {
           productId: string;
           name: string;
           nameTh: string;
+          englishName?: string | null;
           quantity: number;
           price: number;
           imageUrl: string;
           variantId?: string | null;
           size?: string | null;
           color?: string | null;
+          optionLabel?: string | null;
         }) => ({
           productId: i.productId,
           name: i.name,
           nameTh: i.nameTh,
+          englishName: i.englishName ?? null,
           quantity: i.quantity,
           price: i.price,
           imageUrl: i.imageUrl,
           variantId: i.variantId ?? null,
           size: (i.size as ProductSize | null | undefined) ?? null,
           color: (i.color as ProductColor | null | undefined) ?? null,
+          optionLabel: i.optionLabel ?? null,
         }),
       ),
       totalAmount,

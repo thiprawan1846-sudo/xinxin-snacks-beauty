@@ -140,6 +140,7 @@ interface ProductRow {
   id: string;
   name: string;
   nameTh: string;
+  englishName?: string | null;
   description: string;
   descriptionTh: string;
   categoryId: string;
@@ -148,6 +149,7 @@ interface ProductRow {
   stock: number;
   imageUrl: string;
   gallery: string[] | null;
+  options: string[] | null;
   tags: string[];
   status: string;
   rating: number;
@@ -179,12 +181,14 @@ interface OrderItemRow {
   productId: string;
   name: string;
   nameTh: string;
+  englishName?: string | null;
   quantity: number;
   price: string | number;
   imageUrl: string;
   variantId?: string | null;
   size?: string | null;
   color?: string | null;
+  optionLabel?: string | null;
 }
 
 interface ProductVariantRow {
@@ -238,18 +242,23 @@ function toVariant(v: ProductVariantRow): ProductVariant {
 }
 
 function toProduct(p: ProductRow, categorySlug: string, variants?: ProductVariant[]): Product {
+  // gallery 优先；为空则用 imageUrl 单图。封面 = gallery[0] ?? imageUrl。
+  const gallery = p.gallery && p.gallery.length > 0 ? p.gallery : [p.imageUrl];
+  const cover = gallery[0] ?? p.imageUrl;
   return {
     id: p.id,
     name: p.name,
     nameTh: p.nameTh,
+    englishName: p.englishName ?? null,
     description: p.description,
     descriptionTh: p.descriptionTh,
     category: categorySlug as Product["category"],
     price: Number(p.price),
     originalPrice: p.originalPrice != null ? Number(p.originalPrice) : undefined,
     stock: p.stock,
-    imageUrl: p.imageUrl,
-    gallery: p.gallery ?? undefined,
+    imageUrl: cover,
+    gallery,
+    options: p.options ?? null,
     tags: p.tags ?? [],
     status: p.status as ProductStatus,
     rating: p.rating,
@@ -271,12 +280,14 @@ function toOrderItem(i: OrderItemRow): AppOrderItem {
     productId: i.productId,
     name: i.name,
     nameTh: i.nameTh,
+    englishName: i.englishName ?? null,
     quantity: i.quantity,
     price: Number(i.price),
     imageUrl: i.imageUrl,
     variantId: i.variantId ?? null,
     size: (i.size as ProductSize | null) ?? null,
     color: (i.color as ProductColor | null) ?? null,
+    optionLabel: i.optionLabel ?? null,
   };
 }
 
@@ -474,12 +485,14 @@ export async function createOrder(input: {
     productId: string;
     name: string;
     nameTh: string;
+    englishName?: string | null;
     quantity: number;
     price: number;
     imageUrl: string;
     variantId?: string | null;
     size?: ProductSize | null;
     color?: ProductColor | null;
+    optionLabel?: string | null;
   }[];
   totalAmount: number;
   customerName: string;
@@ -509,12 +522,14 @@ export async function createOrder(input: {
     productId: i.productId,
     name: i.name,
     nameTh: i.nameTh,
+    englishName: i.englishName ?? null,
     quantity: i.quantity,
     price: i.price,
     imageUrl: i.imageUrl,
     variantId: i.variantId ?? null,
     size: i.size ?? null,
     color: i.color ?? null,
+    optionLabel: i.optionLabel ?? null,
   }));
   await restInsert("OrderItem", itemsPayload);
 
@@ -555,12 +570,14 @@ export async function createOrder(input: {
       productId: i.productId,
       name: i.name,
       nameTh: i.nameTh,
+      englishName: i.englishName ?? null,
       quantity: i.quantity,
       price: i.price,
       imageUrl: i.imageUrl,
       variantId: i.variantId,
       size: (i.size as ProductSize | null) ?? null,
       color: (i.color as ProductColor | null) ?? null,
+      optionLabel: i.optionLabel ?? null,
     })),
     totalAmount: input.totalAmount,
     status: "PENDING",
@@ -737,6 +754,7 @@ function parseTotalCount(res: Response): number {
 export async function createProduct(input: {
   name: string;
   nameTh: string;
+  englishName?: string | null;
   description: string;
   descriptionTh: string;
   categorySlug: string;
@@ -744,6 +762,8 @@ export async function createProduct(input: {
   originalPrice?: number;
   stock: number;
   imageUrl: string;
+  gallery?: string[] | null;
+  options?: string[] | null;
   tags: string[];
   status?: ProductStatus;
   rating?: number;
@@ -758,18 +778,23 @@ export async function createProduct(input: {
 
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
+  // gallery 至少 1 张；若未提供则用 imageUrl 兜底
+  const gallery =
+    input.gallery && input.gallery.length > 0 ? input.gallery : [input.imageUrl];
   const row: ProductRow = {
     id,
     name: input.name,
     nameTh: input.nameTh,
+    englishName: input.englishName ?? null,
     description: input.description,
     descriptionTh: input.descriptionTh,
     categoryId: catId,
     price: input.price,
     originalPrice: input.originalPrice ?? null,
     stock: input.stock,
-    imageUrl: input.imageUrl,
-    gallery: null,
+    imageUrl: gallery[0] ?? input.imageUrl,
+    gallery,
+    options: input.options ?? null,
     tags: input.tags,
     status: input.status ?? "ACTIVE",
     rating: input.rating ?? 0,
@@ -818,6 +843,7 @@ export async function updateProduct(
       Product,
       | "name"
       | "nameTh"
+      | "englishName"
       | "description"
       | "descriptionTh"
       | "price"
@@ -825,6 +851,8 @@ export async function updateProduct(
       | "stock"
       | "status"
       | "imageUrl"
+      | "gallery"
+      | "options"
       | "tags"
       | "reason"
       | "brand"
@@ -836,6 +864,7 @@ export async function updateProduct(
   const patch: Record<string, unknown> = { updatedAt: new Date().toISOString() };
   if (data.name !== undefined) patch.name = data.name;
   if (data.nameTh !== undefined) patch.nameTh = data.nameTh;
+  if (data.englishName !== undefined) patch.englishName = data.englishName;
   if (data.description !== undefined) patch.description = data.description;
   if (data.descriptionTh !== undefined) patch.descriptionTh = data.descriptionTh;
   if (data.price !== undefined) patch.price = data.price;
@@ -843,11 +872,18 @@ export async function updateProduct(
   if (data.stock !== undefined) patch.stock = data.stock;
   if (data.status !== undefined) patch.status = data.status;
   if (data.imageUrl !== undefined) patch.imageUrl = data.imageUrl;
+  if (data.gallery !== undefined) patch.gallery = data.gallery;
+  if (data.options !== undefined) patch.options = data.options;
   if (data.tags !== undefined) patch.tags = data.tags;
   if (data.reason !== undefined) patch.reason = data.reason;
   if (data.brand !== undefined) patch.brand = data.brand;
   if (data.isFeatured !== undefined) patch.isFeatured = data.isFeatured;
   if (data.isHot !== undefined) patch.isHot = data.isHot;
+
+  // gallery 不为空时同步 imageUrl 为第一张（保持封面一致）
+  if (data.gallery && data.gallery.length > 0) {
+    patch.imageUrl = data.gallery[0];
+  }
 
   const updated = await restUpdate<ProductRow>("Product", { id }, patch);
   if (updated.length === 0) return undefined;
@@ -873,6 +909,7 @@ interface CartItemRow {
   variantId?: string | null;
   size?: string | null;
   color?: string | null;
+  optionLabel?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -930,17 +967,22 @@ export async function getCart(
     const stock = r.variantId
       ? await getVariantStock(r.variantId)
       : p.stock;
+    // 封面图：gallery[0] ?? imageUrl
+    const cover =
+      p.gallery && p.gallery.length > 0 ? p.gallery[0] : p.imageUrl;
     out.push({
       productId: p.id,
       name: p.name,
       nameTh: p.nameTh,
+      englishName: p.englishName ?? null,
       price: Number(p.price),
-      imageUrl: p.imageUrl,
+      imageUrl: cover,
       stock,
       quantity: r.quantity,
       variantId: r.variantId ?? null,
       size: (r.size as ProductSize | null) ?? null,
       color: (r.color as ProductColor | null) ?? null,
+      optionLabel: r.optionLabel ?? null,
     });
   }
   return out;
@@ -962,6 +1004,7 @@ async function getVariantStock(variantId: string): Promise<number> {
 /**
  * Replace all cart items for a user with the given list.
  * 支持服饰规格：variantId/size/color 会一并写入 CartItem。
+ * 支持美妆规格：optionLabel 会一并写入 CartItem。
  */
 export async function setCart(
   userId: string,
@@ -971,6 +1014,7 @@ export async function setCart(
     variantId?: string | null;
     size?: ProductSize | null;
     color?: ProductColor | null;
+    optionLabel?: string | null;
   }[],
 ): Promise<void> {
   const cartId = await ensureCart(userId);
@@ -994,6 +1038,7 @@ export async function setCart(
     variantId: i.variantId ?? null,
     size: i.size ?? null,
     color: i.color ?? null,
+    optionLabel: i.optionLabel ?? null,
     createdAt: now,
     updatedAt: now,
   }));

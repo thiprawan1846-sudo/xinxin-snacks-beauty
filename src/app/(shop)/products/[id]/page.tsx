@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { SafeImage as Image } from "@/components/ui/safe-image";
 import Link from "next/link";
 import { Star, Truck, ShieldCheck, RotateCcw } from "lucide-react";
 import { getProductById, getProductsByCategory } from "@/lib/db";
@@ -9,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { ProductCard } from "@/components/shop/product-card";
 import { AddToCartSection } from "@/components/shop/add-to-cart-section";
 import { SectionHeading } from "@/components/shop/section-heading";
+import { ProductGallery } from "@/components/shop/product-gallery";
 
 // ISR: keep product details (price/stock) fresh.
 export const revalidate = 60;
@@ -67,25 +67,16 @@ export default async function ProductDetailPage({ params }: PageProps) {
       </nav>
 
       <div className="grid gap-8 lg:grid-cols-2 lg:gap-12">
-        {/* Image */}
-        <div className="relative aspect-square overflow-hidden rounded-3xl border border-sakura-100/70 bg-white shadow-soft">
-          <Image
-            src={product.imageUrl}
-            alt={product.nameTh}
-            fill
-            sizes="(max-width: 1024px) 100vw, 50vw"
-            priority
-            className="object-cover"
-          />
-          {discount > 0 && (
-            <Badge
-              variant="solid"
-              className="absolute left-4 top-4 shadow-soft-lg"
-            >
-              -{discount}%
-            </Badge>
-          )}
-        </div>
+        {/* Image gallery: 多图轮播 + 缩略图切换 */}
+        <ProductGallery
+          images={
+            product.gallery && product.gallery.length > 0
+              ? product.gallery
+              : [product.imageUrl]
+          }
+          alt={product.nameTh}
+          discount={discount}
+        />
 
         {/* Info */}
         <div className="flex flex-col">
@@ -108,6 +99,12 @@ export default async function ProductDetailPage({ params }: PageProps) {
             {product.nameTh}
           </h1>
           <p className="mt-1 text-sm text-ink-muted">{product.name}</p>
+          {/* 友好英文名（可选）：有值则在主标题下方以较小字体显示 */}
+          {product.englishName && (
+            <p className="mt-1 text-sm font-medium text-ink-soft/80">
+              {product.englishName}
+            </p>
+          )}
 
           {/* Rating */}
           <div className="mt-4 flex items-center gap-3">

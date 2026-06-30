@@ -19,6 +19,17 @@ export function ProductCard({ product, className, priority }: ProductCardProps) 
   const add = useCart((s) => s.add);
   const [added, setAdded] = useState(false);
   const soldOut = product.stock <= 0;
+  // 美妆商品且配置了自定义规格：必须到详情页选择规格后才能加购
+  const needsOptionSelection =
+    product.category === "beauty" &&
+    Array.isArray(product.options) &&
+    product.options.length > 0;
+  // 服饰商品有 SKU：必须到详情页选择颜色/尺码后才能加购
+  const needsVariantSelection =
+    product.category === "clothing" &&
+    Array.isArray(product.variants) &&
+    product.variants.length > 0;
+  const quickAddDisabled = soldOut || needsOptionSelection || needsVariantSelection;
   const discount = product.originalPrice
     ? Math.round((1 - product.price / product.originalPrice) * 100)
     : 0;
@@ -26,7 +37,7 @@ export function ProductCard({ product, className, priority }: ProductCardProps) 
   const handleAdd = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (soldOut || added) return;
+    if (quickAddDisabled || added) return;
     add(product, 1);
     setAdded(true);
     setTimeout(() => setAdded(false), 1400);
@@ -77,7 +88,7 @@ export function ProductCard({ product, className, priority }: ProductCardProps) 
         )}
 
         {/* Quick add */}
-        {!soldOut && (
+        {!quickAddDisabled ? (
           <button
             onClick={handleAdd}
             aria-label="เพิ่มลงตะกร้า"
@@ -90,6 +101,13 @@ export function ProductCard({ product, className, priority }: ProductCardProps) 
           >
             {added ? <Check className="h-5 w-5" /> : <Plus className="h-5 w-5" />}
           </button>
+        ) : (
+          !soldOut && (
+            // 需要选规格的商品：显示提示角标，引导用户进入详情页
+            <span className="absolute bottom-3 right-3 rounded-full bg-ink/70 px-2.5 py-1 text-[10px] font-medium text-white opacity-0 backdrop-blur-sm transition-opacity group-hover:opacity-100">
+              เลือกข้อมูลสินค้า
+            </span>
+          )
         )}
       </div>
 
@@ -105,6 +123,12 @@ export function ProductCard({ product, className, priority }: ProductCardProps) 
         <h3 className="line-clamp-1 font-display text-sm font-semibold text-ink">
           {product.nameTh}
         </h3>
+        {/* 友好英文名（可选）：有值时以较小字体显示在主名下方 */}
+        {product.englishName && (
+          <p className="line-clamp-1 text-[11px] text-ink-soft/70">
+            {product.englishName}
+          </p>
+        )}
         <p className="mt-0.5 line-clamp-2 text-xs leading-relaxed text-ink-muted">
           {truncate(product.descriptionTh, 70)}
         </p>

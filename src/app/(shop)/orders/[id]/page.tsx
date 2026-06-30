@@ -186,7 +186,13 @@ export default function OrderDetailPage({ params }: PageProps) {
                       {item.nameTh}
                     </Link>
                     <p className="text-xs text-ink-muted">{item.name}</p>
-                    {(item.color || item.size) && (
+                    {/* 英文名快照（如果有） */}
+                    {item.englishName && (
+                      <p className="text-[11px] text-ink-soft/70">
+                        {item.englishName}
+                      </p>
+                    )}
+                    {(item.color || item.size || item.optionLabel) && (
                       <div className="mt-1 flex flex-wrap items-center gap-1.5">
                         {item.color && (
                           <span className="inline-flex items-center gap-1 rounded-full bg-sakura-50 px-2 py-0.5 text-[11px] font-medium text-ink-soft">
@@ -196,6 +202,11 @@ export default function OrderDetailPage({ params }: PageProps) {
                         {item.size && (
                           <span className="rounded-full bg-sakura-50 px-2 py-0.5 text-[11px] font-medium text-ink-soft">
                             ไซส์ {item.size}
+                          </span>
+                        )}
+                        {item.optionLabel && (
+                          <span className="rounded-full bg-peach-100 px-2 py-0.5 text-[11px] font-medium text-peach-600">
+                            {item.optionLabel}
                           </span>
                         )}
                       </div>

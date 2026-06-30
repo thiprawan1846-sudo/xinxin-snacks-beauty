@@ -65,6 +65,7 @@ export async function POST(request: Request) {
   const product = await createProduct({
     name: body.name,
     nameTh: body.nameTh,
+    englishName: body.englishName ?? null,
     description: body.description ?? "",
     descriptionTh: body.descriptionTh ?? "",
     categorySlug: body.category ?? "snacks",
@@ -72,6 +73,8 @@ export async function POST(request: Request) {
     originalPrice: body.originalPrice,
     stock: body.stock ?? 0,
     imageUrl: body.imageUrl,
+    gallery: Array.isArray(body.gallery) ? body.gallery : null,
+    options: Array.isArray(body.options) ? body.options : null,
     tags: body.tags ?? [],
     status: body.status ?? "ACTIVE",
     rating: body.rating ?? 0,

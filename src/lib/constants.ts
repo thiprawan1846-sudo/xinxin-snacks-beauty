@@ -144,3 +144,8 @@ export const COLOR_META: Record<ProductColor, ColorMeta> = PRODUCT_COLORS.reduce
 export function categoryHasVariants(category: string): boolean {
   return category === "clothing";
 }
+
+/** 仅美妆分类支持自定义规格（Options） */
+export function categoryHasOptions(category: string): boolean {
+  return category === "beauty";
+}
