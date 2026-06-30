@@ -7,6 +7,35 @@ export type Category = "snacks" | "beauty" | "drinks" | "clothing" | "all";
 
 export type ProductStatus = "ACTIVE" | "INACTIVE" | "DRAFT";
 
+/** 服饰规格 — 尺码 */
+export type ProductSize = "XS" | "S" | "M" | "L" | "XL" | "XXL";
+
+/** 服饰规格 — 颜色 */
+export type ProductColor =
+  | "White"
+  | "Black"
+  | "Pink"
+  | "Blue"
+  | "Green"
+  | "Beige";
+
+/**
+ * 商品 SKU（规格变体）。
+ * 服饰类商品每个 size×color 组合占一行，库存独立管理。
+ * 非服饰商品不创建 variant。
+ */
+export interface ProductVariant {
+  id: string;
+  productId: string;
+  size: ProductSize | null;
+  color: ProductColor | null;
+  stock: number;
+  /** 可选：覆盖 Product.price（同款不同色加价场景）。null = 沿用商品价 */
+  priceOverride?: number | null;
+  /** 人类可读 SKU 码，如 TEE-PINK-M */
+  sku?: string | null;
+}
+
 export interface Product {
   id: string;
   name: string;
@@ -30,6 +59,8 @@ export interface Product {
   deletedAt?: string | null; // 软删除时间，null = 未删除
   createdAt: string;
   updatedAt: string;
+  /** 服饰类商品的 SKU 列表；非服饰为 undefined/空 */
+  variants?: ProductVariant[];
 }
 
 export interface CartItem {
@@ -40,6 +71,10 @@ export interface CartItem {
   imageUrl: string;
   quantity: number;
   stock: number;
+  /** 服饰 SKU id（同一商品不同颜色/尺码各占一行购物车） */
+  variantId?: string | null;
+  size?: ProductSize | null;
+  color?: ProductColor | null;
 }
 
 export type OrderStatus =
@@ -57,6 +92,10 @@ export interface OrderItem {
   quantity: number;
   price: number;
   imageUrl: string;
+  /** 服饰 SKU 信息（订单创建时快照，便于发货时核对规格） */
+  variantId?: string | null;
+  size?: ProductSize | null;
+  color?: ProductColor | null;
 }
 
 export interface Order {

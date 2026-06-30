@@ -1,14 +1,34 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { X, Loader2, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ImageInput } from "@/components/admin/image-input";
 import { cn } from "@/lib/utils";
-import type { Product, ProductStatus } from "@/types";
+import {
+  PRODUCT_SIZES,
+  PRODUCT_COLORS,
+  COLOR_META,
+  categoryHasVariants,
+} from "@/lib/constants";
+import type {
+  Product,
+  ProductColor,
+  ProductSize,
+  ProductStatus,
+  ProductVariant,
+} from "@/types";
 
-type CategorySlug = "snacks" | "beauty" | "drinks";
+type CategorySlug = "snacks" | "beauty" | "drinks" | "clothing";
+
+/** drawer 内部维护的 SKU 草稿 */
+interface VariantDraft {
+  size: ProductSize;
+  color: ProductColor;
+  stock: number;
+  priceOverride: string; // 用 string 方便受控输入；空串 = 不覆盖
+}
 
 interface FormState {
   name: string;
@@ -53,19 +73,72 @@ interface Props {
 /**
  * Right-side slide-over drawer for creating or editing a product.
  * Create → POST /api/admin/products ; Edit → PATCH /api/admin/products/:id
+ * 服饰分类额外保存 SKU → PUT /api/admin/products/:id/variants
  */
 export function ProductDrawer({ open, product, onClose, onSaved }: Props) {
   const [form, setForm] = useState<FormState>(toForm(product));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // 服饰规格
+  const [selectedSizes, setSelectedSizes] = useState<ProductSize[]>([]);
+  const [selectedColors, setSelectedColors] = useState<ProductColor[]>([]);
+  const [variantDrafts, setVariantDrafts] = useState<Record<string, VariantDraft>>({});
+  const [variantsLoaded, setVariantsLoaded] = useState(false);
+
+  const isClothing = categoryHasVariants(form.category);
+
   // Reset form whenever the drawer opens or the target product changes.
   useEffect(() => {
     if (open) {
       setForm(toForm(product));
       setError(null);
+      setSelectedSizes([]);
+      setSelectedColors([]);
+      setVariantDrafts({});
+      setVariantsLoaded(false);
+
+      // 编辑服饰商品：拉取已有 SKU
+      if (product && categoryHasVariants(product.category)) {
+        void loadVariants(product.id);
+      } else {
+        setVariantsLoaded(true);
+      }
     }
   }, [open, product]);
+
+  async function loadVariants(productId: string) {
+    try {
+      const res = await fetch(`/api/admin/products/${productId}/variants`);
+      if (!res.ok) return;
+      const { data } = (await res.json()) as { data: ProductVariant[] };
+      const sizes = new Set<ProductSize>();
+      const colors = new Set<ProductColor>();
+      const drafts: Record<string, VariantDraft> = {};
+      for (const v of data) {
+        if (v.size) sizes.add(v.size);
+        if (v.color) colors.add(v.color);
+        if (v.size && v.color) {
+          drafts[skuKey(v.size, v.color)] = {
+            size: v.size,
+            color: v.color,
+            stock: v.stock,
+            priceOverride:
+              v.priceOverride != null ? String(v.priceOverride) : "",
+          };
+        }
+      }
+      setSelectedSizes(
+        PRODUCT_SIZES.map((s) => s.value).filter((s) => sizes.has(s)),
+      );
+      setSelectedColors(
+        PRODUCT_COLORS.map((c) => c.value).filter((c) => colors.has(c)),
+      );
+      setVariantDrafts(drafts);
+    } finally {
+      setVariantsLoaded(true);
+    }
+  }
 
   // Esc to close
   useEffect(() => {
@@ -85,6 +158,10 @@ export function ProductDrawer({ open, product, onClose, onSaved }: Props) {
     if (!form.price || Number(form.price) < 0) return "请填写有效的价格";
     if (form.stock === "" || Number(form.stock) < 0) return "请填写有效的库存";
     if (!form.imageUrl.trim()) return "请上传或填写商品图片";
+    if (isClothing) {
+      if (selectedSizes.length === 0) return "服饰商品请至少选择一个尺码";
+      if (selectedColors.length === 0) return "服饰商品请至少选择一个颜色";
+    }
     return null;
   }
 
@@ -127,13 +204,61 @@ export function ProductDrawer({ open, product, onClose, onSaved }: Props) {
           });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "保存失败");
-      onSaved(json.data as Product, isNew);
+      const saved: Product = json.data;
+
+      // 服饰：保存 SKU
+      if (categoryHasVariants(form.category)) {
+        const variantsPayload = buildVariantPayload();
+        const vRes = await fetch(
+          `/api/admin/products/${saved.id}/variants`,
+          {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ variants: variantsPayload }),
+          },
+        );
+        const vJson = await vRes.json();
+        if (!vRes.ok) throw new Error(vJson.error ?? "规格保存失败");
+        saved.variants = vJson.data;
+      }
+
+      onSaved(saved, isNew);
     } catch (e) {
       setError(e instanceof Error ? e.message : "保存失败");
     } finally {
       setSaving(false);
     }
   }
+
+  /** 从 selectedSizes × selectedColors + variantDrafts 组装最终 SKU 列表。 */
+  function buildVariantPayload() {
+    const out: {
+      size: ProductSize;
+      color: ProductColor;
+      stock: number;
+      priceOverride: number | null;
+    }[] = [];
+    for (const size of selectedSizes) {
+      for (const color of selectedColors) {
+        const d = variantDrafts[skuKey(size, color)];
+        const stock = d ? Math.max(0, Math.floor(Number(d.stock) || 0)) : 0;
+        const priceOverride =
+          d && d.priceOverride.trim() !== "" ? Number(d.priceOverride) : null;
+        out.push({ size, color, stock, priceOverride });
+      }
+    }
+    return out;
+  }
+
+  // SKU 矩阵总库存（用于显示）
+  const totalSkuStock = useMemo(
+    () =>
+      Object.values(variantDrafts).reduce(
+        (sum, d) => sum + (Math.max(0, Math.floor(Number(d.stock) || 0))),
+        0,
+      ),
+    [variantDrafts],
+  );
 
   return (
     <>
@@ -248,14 +373,24 @@ export function ProductDrawer({ open, product, onClose, onSaved }: Props) {
                   placeholder="0.00"
                 />
               </Field>
-              <Field label="库存数量" required>
+              <Field
+                label={isClothing ? "商品总库存（参考）" : "库存数量"}
+                required
+                hint={
+                  isClothing
+                    ? "服饰按 SKU 库存自动统计"
+                    : undefined
+                }
+              >
                 <Input
                   type="number"
                   min="0"
                   step="1"
-                  value={form.stock}
-                  onChange={(e) => set("stock", e.target.value)}
+                  value={isClothing ? String(totalSkuStock) : form.stock}
+                  onChange={(e) => !isClothing && set("stock", e.target.value)}
                   placeholder="0"
+                  disabled={isClothing}
+                  readOnly={isClothing}
                 />
               </Field>
             </div>
@@ -266,6 +401,47 @@ export function ProductDrawer({ open, product, onClose, onSaved }: Props) {
                 onChange={(url) => set("imageUrl", url)}
               />
             </Field>
+
+            {/* ───────── 服饰规格编辑器 ───────── */}
+            {isClothing && (
+              <VariantEditor
+                loaded={variantsLoaded}
+                selectedSizes={selectedSizes}
+                selectedColors={selectedColors}
+                variantDrafts={variantDrafts}
+                onToggleSize={(s) => toggleSize(s, selectedSizes, setSelectedSizes, variantDrafts, setVariantDrafts)}
+                onToggleColor={(c) => toggleColor(c, selectedColors, setSelectedColors, variantDrafts, setVariantDrafts)}
+                onDraftChange={(size, color, field, value) =>
+                  setVariantDrafts((prev) => ({
+                    ...prev,
+                    [skuKey(size, color)]: {
+                      ...(prev[skuKey(size, color)] ?? {
+                        size,
+                        color,
+                        stock: 0,
+                        priceOverride: "",
+                      }),
+                      [field]: value,
+                    },
+                  }))
+                }
+                onBulkStock={(stock) => {
+                  setVariantDrafts((prev) => {
+                    const next = { ...prev };
+                    for (const s of selectedSizes) {
+                      for (const c of selectedColors) {
+                        const k = skuKey(s, c);
+                        next[k] = {
+                          ...(next[k] ?? { size: s, color: c, stock: 0, priceOverride: "" }),
+                          stock,
+                        };
+                      }
+                    }
+                    return next;
+                  });
+                }}
+              />
+            )}
 
             <Field label="商品状态">
               <div className="flex gap-2">
@@ -328,13 +504,284 @@ export function ProductDrawer({ open, product, onClose, onSaved }: Props) {
   );
 }
 
+// ───────────────────── Variant Editor ─────────────────────
+
+function VariantEditor({
+  loaded,
+  selectedSizes,
+  selectedColors,
+  variantDrafts,
+  onToggleSize,
+  onToggleColor,
+  onDraftChange,
+  onBulkStock,
+}: {
+  loaded: boolean;
+  selectedSizes: ProductSize[];
+  selectedColors: ProductColor[];
+  variantDrafts: Record<string, VariantDraft>;
+  onToggleSize: (s: ProductSize) => void;
+  onToggleColor: (c: ProductColor) => void;
+  onDraftChange: (
+    size: ProductSize,
+    color: ProductColor,
+    field: "stock" | "priceOverride",
+    value: string,
+  ) => void;
+  onBulkStock: (stock: number) => void;
+}) {
+  const [bulkStock, setBulkStock] = useState("");
+
+  if (!loaded) {
+    return (
+      <div className="rounded-2xl border border-sakura-100 bg-sakura-50/40 p-4 text-center text-xs text-ink-muted">
+        <Loader2 className="mx-auto mb-2 h-4 w-4 animate-spin" />
+        กำลังโหลดข้อมูลสินค้า...
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3 rounded-2xl border border-sakura-200 bg-sakura-50/40 p-4">
+      <div className="flex items-center gap-2">
+        <span className="text-sm">👕</span>
+        <span className="text-sm font-semibold text-ink">服饰规格 (SKU)</span>
+      </div>
+
+      {/* 尺码多选 */}
+      <div>
+        <p className="mb-1.5 text-xs font-medium text-ink-soft">
+          尺码 <span className="text-rose-500">*</span>
+          <span className="ml-1 text-ink-muted">
+            （已选 {selectedSizes.length}）
+          </span>
+        </p>
+        <div className="flex flex-wrap gap-1.5">
+          {PRODUCT_SIZES.map((s) => {
+            const active = selectedSizes.includes(s.value);
+            return (
+              <button
+                key={s.value}
+                type="button"
+                onClick={() => onToggleSize(s.value)}
+                className={cn(
+                  "grid h-8 min-w-8 place-items-center rounded-full border px-2.5 text-xs font-semibold transition-all active:scale-95",
+                  active
+                    ? "border-sakura-400 bg-sakura-500 text-white shadow-soft"
+                    : "border-sakura-200 bg-white text-ink-soft hover:bg-sakura-50",
+                )}
+              >
+                {s.value}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* 颜色多选 */}
+      <div>
+        <p className="mb-1.5 text-xs font-medium text-ink-soft">
+          颜色 <span className="text-rose-500">*</span>
+          <span className="ml-1 text-ink-muted">
+            （已选 {selectedColors.length}）
+          </span>
+        </p>
+        <div className="flex flex-wrap gap-1.5">
+          {PRODUCT_COLORS.map((c) => {
+            const active = selectedColors.includes(c.value);
+            return (
+              <button
+                key={c.value}
+                type="button"
+                onClick={() => onToggleColor(c.value)}
+                className={cn(
+                  "flex h-8 items-center gap-1.5 rounded-full border px-2.5 text-xs font-medium transition-all active:scale-95",
+                  active
+                    ? "border-sakura-400 bg-sakura-100 text-ink shadow-soft"
+                    : "border-sakura-200 bg-white text-ink-soft hover:bg-sakura-50",
+                )}
+                title={c.labelTh}
+              >
+                <span
+                  className={cn(
+                    "h-3.5 w-3.5 rounded-full border",
+                    c.swatch,
+                  )}
+                />
+                {c.labelTh}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* SKU 矩阵 */}
+      {selectedSizes.length > 0 && selectedColors.length > 0 && (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-medium text-ink-soft">
+              SKU 库存矩阵
+              <span className="ml-1 text-ink-muted">
+                ({selectedSizes.length}×{selectedColors.length} =
+                {selectedSizes.length * selectedColors.length})
+              </span>
+            </p>
+            {/* 批量设置 */}
+            <div className="flex items-center gap-1">
+              <Input
+                type="number"
+                min="0"
+                value={bulkStock}
+                onChange={(e) => setBulkStock(e.target.value)}
+                placeholder="批量"
+                className="h-7 w-16 px-2 text-xs"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  const n = Number(bulkStock);
+                  if (!Number.isNaN(n) && n >= 0) {
+                    onBulkStock(Math.floor(n));
+                    setBulkStock("");
+                  }
+                }}
+                className="rounded-full bg-sakura-100 px-2.5 py-1 text-xs font-medium text-sakura-700 transition-colors hover:bg-sakura-200"
+              >
+                应用
+              </button>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto rounded-xl border border-sakura-100 bg-white">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-sakura-100 bg-sakura-50/60">
+                  <th className="sticky left-0 z-10 bg-sakura-50/60 px-2 py-1.5 text-left font-semibold text-ink-soft">
+                    Size \ Color
+                  </th>
+                  {selectedColors.map((c) => {
+                    const meta = COLOR_META[c];
+                    return (
+                      <th
+                        key={c}
+                        className="px-2 py-1.5 text-center font-semibold text-ink-soft"
+                      >
+                        <span className="inline-flex items-center gap-1">
+                          <span
+                            className={cn(
+                              "h-3 w-3 rounded-full border",
+                              meta.swatch,
+                            )}
+                          />
+                          {meta.labelTh}
+                        </span>
+                      </th>
+                    );
+                  })}
+                </tr>
+              </thead>
+              <tbody>
+                {selectedSizes.map((size) => (
+                  <tr
+                    key={size}
+                    className="border-b border-sakura-50 last:border-0"
+                  >
+                    <td className="sticky left-0 z-10 bg-white px-2 py-1.5 font-semibold text-ink">
+                      {size}
+                    </td>
+                    {selectedColors.map((color) => {
+                      const draft =
+                        variantDrafts[skuKey(size, color)] ?? {
+                          size,
+                          color,
+                          stock: 0,
+                          priceOverride: "",
+                        };
+                      return (
+                        <td key={color} className="px-1.5 py-1">
+                          <input
+                            type="number"
+                            min="0"
+                            value={draft.stock}
+                            onChange={(e) =>
+                              onDraftChange(size, color, "stock", e.target.value)
+                            }
+                            className="h-7 w-16 rounded-lg border border-sakura-200 bg-white px-1.5 text-center text-xs text-ink outline-none focus:border-sakura-400 focus:ring-1 focus:ring-sakura-200"
+                            placeholder="0"
+                          />
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-[11px] text-ink-muted">
+            提示：每个颜色×尺码组合的库存独立管理。库存为 0 的 SKU 仍会保存但前台显示缺货。
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ───────────────────── helpers ─────────────────────
+
+function skuKey(size: ProductSize, color: ProductColor): string {
+  return `${size}__${color}`;
+}
+
+function toggleSize(
+  size: ProductSize,
+  selected: ProductSize[],
+  setSelected: (s: ProductSize[]) => void,
+  drafts: Record<string, VariantDraft>,
+  setDrafts: (d: Record<string, VariantDraft>) => void,
+) {
+  if (selected.includes(size)) {
+    setSelected(selected.filter((s) => s !== size));
+    // 清理被移除 size 相关的草稿
+    const next: Record<string, VariantDraft> = {};
+    for (const [k, v] of Object.entries(drafts)) {
+      if (v.size !== size) next[k] = v;
+    }
+    setDrafts(next);
+  } else {
+    setSelected([...selected, size]);
+  }
+}
+
+function toggleColor(
+  color: ProductColor,
+  selected: ProductColor[],
+  setSelected: (c: ProductColor[]) => void,
+  drafts: Record<string, VariantDraft>,
+  setDrafts: (d: Record<string, VariantDraft>) => void,
+) {
+  if (selected.includes(color)) {
+    setSelected(selected.filter((c) => c !== color));
+    const next: Record<string, VariantDraft> = {};
+    for (const [k, v] of Object.entries(drafts)) {
+      if (v.color !== color) next[k] = v;
+    }
+    setDrafts(next);
+  } else {
+    setSelected([...selected, color]);
+  }
+}
+
+// ───────────────────── small UI atoms ─────────────────────
+
 function Field({
   label,
   required,
+  hint,
   children,
 }: {
   label: string;
   required?: boolean;
+  hint?: string;
   children: React.ReactNode;
 }) {
   return (
@@ -342,6 +789,7 @@ function Field({
       <span className="mb-1.5 block text-xs font-medium text-ink-soft">
         {label}
         {required && <span className="ml-0.5 text-rose-500">*</span>}
+        {hint && <span className="ml-1 font-normal text-ink-muted">· {hint}</span>}
       </span>
       {children}
     </label>

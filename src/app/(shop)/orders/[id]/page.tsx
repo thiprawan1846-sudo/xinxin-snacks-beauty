@@ -186,6 +186,20 @@ export default function OrderDetailPage({ params }: PageProps) {
                       {item.nameTh}
                     </Link>
                     <p className="text-xs text-ink-muted">{item.name}</p>
+                    {(item.color || item.size) && (
+                      <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                        {item.color && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-sakura-50 px-2 py-0.5 text-[11px] font-medium text-ink-soft">
+                            สี {item.color}
+                          </span>
+                        )}
+                        {item.size && (
+                          <span className="rounded-full bg-sakura-50 px-2 py-0.5 text-[11px] font-medium text-ink-soft">
+                            ไซส์ {item.size}
+                          </span>
+                        )}
+                      </div>
+                    )}
                     <div className="mt-auto flex items-center justify-between">
                       <span className="text-xs text-ink-muted">
                         จำนวน {item.quantity} ชิ้น

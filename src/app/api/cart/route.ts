@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { getCart, setCart, clearCart } from "@/lib/db";
+import type { ProductColor, ProductSize } from "@/types";
 
 /**
  * Cart API — all endpoints require a logged-in user.
@@ -35,10 +36,25 @@ export async function PUT(request: Request) {
     );
   }
   const body = (await request.json()) as {
-    items?: { productId: string; quantity: number }[];
+    items?: {
+      productId: string;
+      quantity: number;
+      variantId?: string | null;
+      size?: string | null;
+      color?: string | null;
+    }[];
   };
   const items = Array.isArray(body.items) ? body.items : [];
-  await setCart(userId, items);
+  await setCart(
+    userId,
+    items.map((i) => ({
+      productId: i.productId,
+      quantity: i.quantity,
+      variantId: i.variantId ?? null,
+      size: (i.size as ProductSize | null | undefined) ?? null,
+      color: (i.color as ProductColor | null | undefined) ?? null,
+    })),
+  );
   return NextResponse.json({ data: { ok: true } });
 }
 

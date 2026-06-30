@@ -54,7 +54,13 @@ export default async function ProductDetailPage({ params }: PageProps) {
           href={`/products?category=${product.category}`}
           className="hover:text-sakura-600"
         >
-          {product.category === "snacks" ? "ขนม" : product.category === "beauty" ? "เครื่องสำอาง" : "เครื่องดื่ม"}
+          {product.category === "snacks"
+            ? "ขนม"
+            : product.category === "beauty"
+              ? "เครื่องสำอาง"
+              : product.category === "clothing"
+                ? "เสื้อผ้า"
+                : "เครื่องดื่ม"}
         </Link>
         <span className="mx-1.5">/</span>
         <span className="text-ink-soft">{truncate(product.nameTh, 30)}</span>
@@ -85,7 +91,13 @@ export default async function ProductDetailPage({ params }: PageProps) {
         <div className="flex flex-col">
           <div className="mb-3 flex items-center gap-2">
             <Badge variant="peach">
-              {product.category === "snacks" ? "🍪 ขนม" : product.category === "beauty" ? "💄 บิวตี้" : "🧋 เครื่องดื่ม"}
+              {product.category === "snacks"
+                ? "🍪 ขนม"
+                : product.category === "beauty"
+                  ? "💄 บิวตี้"
+                  : product.category === "clothing"
+                    ? "👕 เสื้อผ้า"
+                    : "🧋 เครื่องดื่ม"}
             </Badge>
             {product.tags.includes("bestseller") && (
               <Badge variant="solid">🔥 ขายดี</Badge>

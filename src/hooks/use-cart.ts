@@ -2,22 +2,31 @@
 
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
-import type { CartItem, Product } from "@/types";
+import type { CartItem, Product, ProductColor, ProductSize } from "@/types";
 
 interface CartState {
   items: CartItem[];
   isOpen: boolean;
   /** True once we've attempted to load the server-side cart for the current user. */
   hydrated: boolean;
-  add: (product: Product, qty?: number) => void;
-  remove: (productId: string) => void;
-  updateQty: (productId: string, qty: number) => void;
+  add: (
+    product: Product,
+    qty?: number,
+    variant?: { id: string; size?: ProductSize | null; color?: ProductColor | null },
+  ) => void;
+  remove: (productId: string, variantId?: string | null) => void;
+  updateQty: (productId: string, qty: number, variantId?: string | null) => void;
   clear: () => void;
   setOpen: (open: boolean) => void;
   /** Replace local items with the server-side cart. Called after login/mount. */
   hydrate: () => Promise<void>;
   totalItems: () => number;
   totalAmount: () => number;
+}
+
+/** 购物车行的唯一 key：productId + variantId（同一商品不同 SKU 各占一行）。 */
+function cartKey(productId: string, variantId?: string | null): string {
+  return variantId ? `${productId}__${variantId}` : productId;
 }
 
 /** Push the current items array to the server. No-op for guests. */
@@ -30,6 +39,9 @@ async function syncToServer(items: CartItem[]) {
         items: items.map((i) => ({
           productId: i.productId,
           quantity: i.quantity,
+          variantId: i.variantId ?? null,
+          size: i.size ?? null,
+          color: i.color ?? null,
         })),
       }),
     });
@@ -45,14 +57,21 @@ export const useCart = create<CartState>()(
       isOpen: false,
       hydrated: false,
 
-      add: (product, qty = 1) =>
+      add: (product, qty = 1, variant) =>
         set((state) => {
-          const existing = state.items.find((i) => i.productId === product.id);
+          const vId = variant?.id ?? null;
+          const key = cartKey(product.id, vId);
+          // 服饰 SKU 库存；非服饰沿用 Product.stock
+          const stock = variant ? variantStock(product, vId) : product.stock;
+          const clampedQty = Math.min(qty, stock);
+          if (clampedQty <= 0) return state;
+
+          const existing = state.items.find((i) => cartKey(i.productId, i.variantId) === key);
           let items: CartItem[];
           if (existing) {
             items = state.items.map((i) =>
-              i.productId === product.id
-                ? { ...i, quantity: Math.min(i.quantity + qty, i.stock) }
+              cartKey(i.productId, i.variantId) === key
+                ? { ...i, quantity: Math.min(i.quantity + qty, stock) }
                 : i,
             );
           } else {
@@ -64,8 +83,11 @@ export const useCart = create<CartState>()(
                 nameTh: product.nameTh,
                 price: product.price,
                 imageUrl: product.imageUrl,
-                quantity: Math.min(qty, product.stock),
-                stock: product.stock,
+                quantity: clampedQty,
+                stock,
+                variantId: vId,
+                size: variant?.size ?? null,
+                color: variant?.color ?? null,
               },
             ];
           }
@@ -73,17 +95,21 @@ export const useCart = create<CartState>()(
           return { items, isOpen: true };
         }),
 
-      remove: (productId) =>
+      remove: (productId, variantId) =>
         set((state) => {
-          const items = state.items.filter((i) => i.productId !== productId);
+          const key = cartKey(productId, variantId);
+          const items = state.items.filter(
+            (i) => cartKey(i.productId, i.variantId) !== key,
+          );
           void syncToServer(items);
           return { items };
         }),
 
-      updateQty: (productId, qty) =>
+      updateQty: (productId, qty, variantId) =>
         set((state) => {
+          const key = cartKey(productId, variantId);
           const items = state.items.map((i) =>
-            i.productId === productId
+            cartKey(i.productId, i.variantId) === key
               ? { ...i, quantity: Math.max(1, Math.min(qty, i.stock)) }
               : i,
           );
@@ -108,8 +134,12 @@ export const useCart = create<CartState>()(
             // Merge: server items win; any local-only items are appended
             // so a guest's pre-login cart isn't silently dropped.
             const local = get().items;
-            const serverIds = new Set(serverItems.map((i) => i.productId));
-            const localOnly = local.filter((i) => !serverIds.has(i.productId));
+            const serverKeys = new Set(
+              serverItems.map((i) => cartKey(i.productId, i.variantId)),
+            );
+            const localOnly = local.filter(
+              (i) => !serverKeys.has(cartKey(i.productId, i.variantId)),
+            );
             const merged =
               localOnly.length > 0 ? [...serverItems, ...localOnly] : serverItems;
             set({ items: merged, hydrated: true });
@@ -134,3 +164,9 @@ export const useCart = create<CartState>()(
     },
   ),
 );
+
+/** 从 product.variants 中取指定 SKU 的库存。 */
+function variantStock(product: Product, variantId: string | null): number {
+  if (!variantId || !product.variants) return product.stock;
+  return product.variants.find((v) => v.id === variantId)?.stock ?? 0;
+}

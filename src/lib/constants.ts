@@ -1,4 +1,10 @@
-import type { OrderStatus, ProductStatus, Category } from "@/types";
+import type {
+  OrderStatus,
+  ProductStatus,
+  Category,
+  ProductSize,
+  ProductColor,
+} from "@/types";
 
 export const ORDER_STATUS_META: Record<
   OrderStatus,
@@ -61,3 +67,80 @@ export const CATEGORY_LABEL: Record<Category, { label: string; emoji: string }> 
 };
 
 export const LOW_STOCK_THRESHOLD = 15;
+
+// ───────────────────── 服饰规格 ─────────────────────
+
+export const PRODUCT_SIZES: { value: ProductSize; label: string }[] = [
+  { value: "XS", label: "XS" },
+  { value: "S", label: "S" },
+  { value: "M", label: "M" },
+  { value: "L", label: "L" },
+  { value: "XL", label: "XL" },
+  { value: "XXL", label: "XXL" },
+];
+
+export interface ColorMeta {
+  value: ProductColor;
+  label: string;
+  labelTh: string;
+  /** 色块 CSS 颜色（用于详情页 swatch） */
+  swatch: string;
+  /** 文字颜色，用于深底色块上的标签 */
+  text?: string;
+}
+
+export const PRODUCT_COLORS: ColorMeta[] = [
+  {
+    value: "White",
+    label: "White",
+    labelTh: "ขาว",
+    swatch: "bg-white border-sakura-200",
+  },
+  {
+    value: "Black",
+    label: "Black",
+    labelTh: "ดำ",
+    swatch: "bg-ink-soft",
+    text: "text-white",
+  },
+  {
+    value: "Pink",
+    label: "Pink",
+    labelTh: "ชมพู",
+    swatch: "bg-sakura-400",
+    text: "text-white",
+  },
+  {
+    value: "Blue",
+    label: "Blue",
+    labelTh: "น้ำเงิน",
+    swatch: "bg-sky-400",
+    text: "text-white",
+  },
+  {
+    value: "Green",
+    label: "Green",
+    labelTh: "เขียว",
+    swatch: "bg-emerald-400",
+    text: "text-white",
+  },
+  {
+    value: "Beige",
+    label: "Beige",
+    labelTh: "เบจ",
+    swatch: "bg-amber-100",
+  },
+];
+
+export const COLOR_META: Record<ProductColor, ColorMeta> = PRODUCT_COLORS.reduce(
+  (acc, c) => {
+    acc[c.value] = c;
+    return acc;
+  },
+  {} as Record<ProductColor, ColorMeta>,
+);
+
+/** 仅服饰分类需要规格 */
+export function categoryHasVariants(category: string): boolean {
+  return category === "clothing";
+}

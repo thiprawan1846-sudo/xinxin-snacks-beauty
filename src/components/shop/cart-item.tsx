@@ -4,6 +4,7 @@ import { SafeImage as Image } from "@/components/ui/safe-image";
 import Link from "next/link";
 import { Minus, Plus, Trash2 } from "lucide-react";
 import type { CartItem } from "@/types";
+import { COLOR_META } from "@/lib/constants";
 import { formatTHB } from "@/lib/utils";
 import { useCart } from "@/hooks/use-cart";
 
@@ -15,6 +16,7 @@ interface CartItemRowProps {
 export function CartItemRow({ item, compact = false }: CartItemRowProps) {
   const updateQty = useCart((s) => s.updateQty);
   const remove = useCart((s) => s.remove);
+  const colorMeta = item.color ? COLOR_META[item.color] : undefined;
 
   return (
     <div className="flex gap-3 py-4">
@@ -40,6 +42,25 @@ export function CartItemRow({ item, compact = false }: CartItemRowProps) {
         </Link>
         <p className="line-clamp-1 text-xs text-ink-muted">{item.name}</p>
 
+        {/* 规格标签（服饰） */}
+        {(item.color || item.size) && (
+          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+            {colorMeta && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-sakura-50 px-2 py-0.5 text-[11px] font-medium text-ink-soft">
+                <span
+                  className={`h-2.5 w-2.5 rounded-full border ${colorMeta.swatch}`}
+                />
+                {colorMeta.labelTh}
+              </span>
+            )}
+            {item.size && (
+              <span className="rounded-full bg-sakura-50 px-2 py-0.5 text-[11px] font-medium text-ink-soft">
+                ไซส์ {item.size}
+              </span>
+            )}
+          </div>
+        )}
+
         <div className="mt-auto flex items-center justify-between pt-2">
           <span className="font-display text-sm font-bold text-sakura-600">
             {formatTHB(item.price)}
@@ -49,7 +70,9 @@ export function CartItemRow({ item, compact = false }: CartItemRowProps) {
             <div className="flex items-center gap-2">
               <div className="flex items-center rounded-full bg-sakura-50 p-1">
                 <button
-                  onClick={() => updateQty(item.productId, item.quantity - 1)}
+                  onClick={() =>
+                    updateQty(item.productId, item.quantity - 1, item.variantId)
+                  }
                   className="grid h-7 w-7 place-items-center rounded-full bg-white text-ink-soft shadow-sm transition-all hover:bg-sakura-100 active:scale-90"
                   aria-label="ลดจำนวน"
                 >
@@ -59,7 +82,9 @@ export function CartItemRow({ item, compact = false }: CartItemRowProps) {
                   {item.quantity}
                 </span>
                 <button
-                  onClick={() => updateQty(item.productId, item.quantity + 1)}
+                  onClick={() =>
+                    updateQty(item.productId, item.quantity + 1, item.variantId)
+                  }
                   disabled={item.quantity >= item.stock}
                   className="grid h-7 w-7 place-items-center rounded-full bg-white text-ink-soft shadow-sm transition-all hover:bg-sakura-100 active:scale-90 disabled:opacity-40"
                   aria-label="เพิ่มจำนวน"
@@ -68,7 +93,7 @@ export function CartItemRow({ item, compact = false }: CartItemRowProps) {
                 </button>
               </div>
               <button
-                onClick={() => remove(item.productId)}
+                onClick={() => remove(item.productId, item.variantId)}
                 className="grid h-7 w-7 place-items-center rounded-full text-ink-muted transition-colors hover:bg-rose-50 hover:text-rose-500"
                 aria-label="ลบสินค้า"
               >

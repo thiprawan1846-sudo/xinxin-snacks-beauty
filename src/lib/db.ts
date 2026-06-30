@@ -12,7 +12,10 @@ import type {
   Order,
   OrderItem as AppOrderItem,
   Product,
+  ProductSize,
+  ProductColor,
   ProductStatus,
+  ProductVariant,
 } from "@/types";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -179,6 +182,21 @@ interface OrderItemRow {
   quantity: number;
   price: string | number;
   imageUrl: string;
+  variantId?: string | null;
+  size?: string | null;
+  color?: string | null;
+}
+
+interface ProductVariantRow {
+  id: string;
+  productId: string;
+  size: string | null;
+  color: string | null;
+  stock: number;
+  priceOverride: string | number | null;
+  sku: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 // Cache slug → categoryId
@@ -206,7 +224,20 @@ async function slugToCategoryId(slug: string): Promise<string | null> {
 
 // ───────────────────── mappers ─────────────────────
 
-function toProduct(p: ProductRow, categorySlug: string): Product {
+function toVariant(v: ProductVariantRow): ProductVariant {
+  return {
+    id: v.id,
+    productId: v.productId,
+    size: (v.size as ProductSize | null) ?? null,
+    color: (v.color as ProductColor | null) ?? null,
+    stock: v.stock,
+    priceOverride:
+      v.priceOverride != null ? Number(v.priceOverride) : null,
+    sku: v.sku ?? null,
+  };
+}
+
+function toProduct(p: ProductRow, categorySlug: string, variants?: ProductVariant[]): Product {
   return {
     id: p.id,
     name: p.name,
@@ -230,6 +261,7 @@ function toProduct(p: ProductRow, categorySlug: string): Product {
     deletedAt: p.deletedAt ?? null,
     createdAt: p.createdAt,
     updatedAt: p.updatedAt,
+    variants,
   };
 }
 
@@ -242,6 +274,9 @@ function toOrderItem(i: OrderItemRow): AppOrderItem {
     quantity: i.quantity,
     price: Number(i.price),
     imageUrl: i.imageUrl,
+    variantId: i.variantId ?? null,
+    size: (i.size as ProductSize | null) ?? null,
+    color: (i.color as ProductColor | null) ?? null,
   };
 }
 
@@ -285,7 +320,8 @@ export async function getProductById(
   if (rows.length === 0) return undefined;
   const p = rows[0];
   const slug = await categoryIdToSlug(p.categoryId);
-  return toProduct(p, slug);
+  const variants = slug === "clothing" ? await getVariantsByProduct(p.id) : undefined;
+  return toProduct(p, slug, variants);
 }
 
 /** Admin read — includes soft-deleted rows. */
@@ -296,7 +332,62 @@ export async function getAdminProductById(
   if (rows.length === 0) return undefined;
   const p = rows[0];
   const slug = await categoryIdToSlug(p.categoryId);
-  return toProduct(p, slug);
+  const variants = slug === "clothing" ? await getVariantsByProduct(p.id) : undefined;
+  return toProduct(p, slug, variants);
+}
+
+// ───────────────────── Product Variants (SKU) ─────────────────────
+
+/** 读取单个商品的全部 SKU。 */
+export async function getVariantsByProduct(
+  productId: string,
+): Promise<ProductVariant[]> {
+  const rows = await restSelect<ProductVariantRow>("ProductVariant", {
+    filter: { productId },
+    order: { column: "createdAt", ascending: true },
+  });
+  return rows.map(toVariant);
+}
+
+/**
+ * 全量替换某商品的 SKU 列表（admin 保存用）。
+ * 实现：删除旧 SKU → 插入新 SKU。被订单引用的旧 SKU 通过 variantId
+ * 字符串字段保留在 OrderItem 中（无 FK），历史订单不受影响。
+ */
+export async function replaceVariants(
+  productId: string,
+  variants: {
+    size: ProductSize | null;
+    color: ProductColor | null;
+    stock: number;
+    priceOverride?: number | null;
+    sku?: string | null;
+  }[],
+): Promise<ProductVariant[]> {
+  // 1. 删除旧
+  const params = new URLSearchParams();
+  params.set("productId", `eq.${productId}`);
+  await fetch(`${SUPABASE_URL}/rest/v1/ProductVariant?${params.toString()}`, {
+    method: "DELETE",
+    headers,
+  });
+
+  // 2. 插入新
+  if (variants.length === 0) return [];
+  const now = new Date().toISOString();
+  const payload = variants.map((v) => ({
+    id: crypto.randomUUID(),
+    productId,
+    size: v.size,
+    color: v.color,
+    stock: v.stock,
+    priceOverride: v.priceOverride ?? null,
+    sku: v.sku ?? null,
+    createdAt: now,
+    updatedAt: now,
+  }));
+  const inserted = await restInsert<ProductVariantRow>("ProductVariant", payload);
+  return inserted.map(toVariant);
 }
 
 export async function getProductsByCategory(
@@ -386,6 +477,9 @@ export async function createOrder(input: {
     quantity: number;
     price: number;
     imageUrl: string;
+    variantId?: string | null;
+    size?: ProductSize | null;
+    color?: ProductColor | null;
   }[];
   totalAmount: number;
   customerName: string;
@@ -408,7 +502,7 @@ export async function createOrder(input: {
     updatedAt: now,
   });
 
-  // 2. Create order items
+  // 2. Create order items（含规格快照，便于发货核对）
   const itemsPayload = input.items.map((i) => ({
     id: crypto.randomUUID(),
     orderId,
@@ -418,20 +512,38 @@ export async function createOrder(input: {
     quantity: i.quantity,
     price: i.price,
     imageUrl: i.imageUrl,
+    variantId: i.variantId ?? null,
+    size: i.size ?? null,
+    color: i.color ?? null,
   }));
   await restInsert("OrderItem", itemsPayload);
 
-  // 3. Decrement stock for each product (best-effort for MVP)
+  // 3. 扣库存：有 variantId 扣 SKU 库存，否则扣 Product.stock
   await Promise.all(
     input.items.map(async (i) => {
-      // Read current stock
-      const rows = await restSelect<ProductRow>("Product", {
-        columns: "id,stock",
-        filter: { id: i.productId },
-      });
-      const current = rows[0]?.stock ?? 0;
-      const newStock = Math.max(0, current - i.quantity);
-      await restUpdate("Product", { id: i.productId }, { stock: newStock });
+      if (i.variantId) {
+        const rows = await restSelect<ProductVariantRow>("ProductVariant", {
+          columns: "id,stock",
+          filter: { id: i.variantId },
+        });
+        const current = rows[0]?.stock ?? 0;
+        await restUpdate(
+          "ProductVariant",
+          { id: i.variantId },
+          { stock: Math.max(0, current - i.quantity), updatedAt: now },
+        );
+      } else {
+        const rows = await restSelect<ProductRow>("Product", {
+          columns: "id,stock",
+          filter: { id: i.productId },
+        });
+        const current = rows[0]?.stock ?? 0;
+        await restUpdate(
+          "Product",
+          { id: i.productId },
+          { stock: Math.max(0, current - i.quantity) },
+        );
+      }
     }),
   );
 
@@ -446,6 +558,9 @@ export async function createOrder(input: {
       quantity: i.quantity,
       price: i.price,
       imageUrl: i.imageUrl,
+      variantId: i.variantId,
+      size: (i.size as ProductSize | null) ?? null,
+      color: (i.color as ProductColor | null) ?? null,
     })),
     totalAmount: input.totalAmount,
     status: "PENDING",
@@ -755,6 +870,9 @@ interface CartItemRow {
   cartId: string;
   productId: string;
   quantity: number;
+  variantId?: string | null;
+  size?: string | null;
+  color?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -808,27 +926,52 @@ export async function getCart(
   for (const r of rows) {
     const p = productMap.get(r.productId);
     if (!p) continue; // product may have been deleted
+    // 服饰类商品 SKU 库存优先；非服饰沿用 Product.stock
+    const stock = r.variantId
+      ? await getVariantStock(r.variantId)
+      : p.stock;
     out.push({
       productId: p.id,
       name: p.name,
       nameTh: p.nameTh,
       price: Number(p.price),
       imageUrl: p.imageUrl,
-      stock: p.stock,
+      stock,
       quantity: r.quantity,
+      variantId: r.variantId ?? null,
+      size: (r.size as ProductSize | null) ?? null,
+      color: (r.color as ProductColor | null) ?? null,
     });
   }
   return out;
 }
 
+/** 读取单个 SKU 的库存（购物车展示用）。失败回退 0。 */
+async function getVariantStock(variantId: string): Promise<number> {
+  try {
+    const rows = await restSelect<ProductVariantRow>("ProductVariant", {
+      columns: "id,stock",
+      filter: { id: variantId },
+    });
+    return rows[0]?.stock ?? 0;
+  } catch {
+    return 0;
+  }
+}
+
 /**
  * Replace all cart items for a user with the given list.
- * Each item only needs productId + quantity; product details are sourced
- * from the Product table at read time.
+ * 支持服饰规格：variantId/size/color 会一并写入 CartItem。
  */
 export async function setCart(
   userId: string,
-  items: { productId: string; quantity: number }[],
+  items: {
+    productId: string;
+    quantity: number;
+    variantId?: string | null;
+    size?: ProductSize | null;
+    color?: ProductColor | null;
+  }[],
 ): Promise<void> {
   const cartId = await ensureCart(userId);
 
@@ -848,6 +991,9 @@ export async function setCart(
     cartId,
     productId: i.productId,
     quantity: i.quantity,
+    variantId: i.variantId ?? null,
+    size: i.size ?? null,
+    color: i.color ?? null,
     createdAt: now,
     updatedAt: now,
   }));

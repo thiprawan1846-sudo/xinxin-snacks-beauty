@@ -10,7 +10,27 @@ import {
   ORDER_STATUS_META,
   ORDER_STATUS_FLOW,
 } from "@/lib/constants";
-import type { Order, OrderStatus } from "@/types";
+import type { Order, OrderStatus, ProductColor } from "@/types";
+
+/** 颜色 → 色块 CSS（管理后台订单缩略图角标用） */
+function colorSwatch(color: ProductColor): string {
+  switch (color) {
+    case "White":
+      return "bg-white";
+    case "Black":
+      return "bg-ink-soft";
+    case "Pink":
+      return "bg-sakura-400";
+    case "Blue":
+      return "bg-sky-400";
+    case "Green":
+      return "bg-emerald-400";
+    case "Beige":
+      return "bg-amber-200";
+    default:
+      return "bg-zinc-300";
+  }
+}
 
 export default function AdminOrdersPage() {
   const orders = useOrders((s) => s.orders);
@@ -119,25 +139,50 @@ export default function AdminOrdersPage() {
             key: "items",
             header: "สินค้า",
             render: (o) => (
-              <div className="flex items-center gap-1.5">
-                {o.items.slice(0, 3).map((item) => (
-                  <div
-                    key={item.id}
-                    className="relative h-9 w-9 overflow-hidden rounded-lg bg-sakura-50 ring-2 ring-white"
-                  >
-                    <Image
-                      src={item.imageUrl}
-                      alt={item.nameTh}
-                      fill
-                      sizes="36px"
-                      className="object-cover"
-                    />
+              <div className="flex flex-col gap-1">
+                <div className="flex items-center gap-1.5">
+                  {o.items.slice(0, 3).map((item) => (
+                    <div
+                      key={item.id}
+                      className="relative h-9 w-9 overflow-hidden rounded-lg bg-sakura-50 ring-2 ring-white"
+                    >
+                      <Image
+                        src={item.imageUrl}
+                        alt={item.nameTh}
+                        fill
+                        sizes="36px"
+                        className="object-cover"
+                      />
+                      {item.color && (
+                        <span
+                          className={`absolute bottom-0 right-0 h-2.5 w-2.5 rounded-tl border border-white ${colorSwatch(item.color)}`}
+                          title={item.color}
+                        />
+                      )}
+                    </div>
+                  ))}
+                  {o.items.length > 3 && (
+                    <span className="text-xs text-ink-muted">
+                      +{o.items.length - 3}
+                    </span>
+                  )}
+                </div>
+                {/* 规格摘要，便于发货核对 */}
+                {(o.items.some((i) => i.color || i.size)) && (
+                  <div className="flex flex-wrap gap-1">
+                    {o.items.slice(0, 3).map((item) =>
+                      item.size || item.color ? (
+                        <span
+                          key={item.id}
+                          className="rounded-full bg-sakura-50 px-1.5 py-0.5 text-[10px] text-ink-soft"
+                        >
+                          {[item.color, item.size && `ไซส์ ${item.size}`]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </span>
+                      ) : null,
+                    )}
                   </div>
-                ))}
-                {o.items.length > 3 && (
-                  <span className="text-xs text-ink-muted">
-                    +{o.items.length - 3}
-                  </span>
                 )}
               </div>
             ),

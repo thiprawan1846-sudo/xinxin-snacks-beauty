@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createOrder, listOrdersByUser } from "@/lib/db";
+import type { ProductColor, ProductSize } from "@/types";
 
 /**
  * GET /api/orders
@@ -39,6 +40,9 @@ export async function POST(request: Request) {
           quantity: number;
           price: number;
           imageUrl: string;
+          variantId?: string | null;
+          size?: string | null;
+          color?: string | null;
         }) => ({
           productId: i.productId,
           name: i.name,
@@ -46,6 +50,9 @@ export async function POST(request: Request) {
           quantity: i.quantity,
           price: i.price,
           imageUrl: i.imageUrl,
+          variantId: i.variantId ?? null,
+          size: (i.size as ProductSize | null | undefined) ?? null,
+          color: (i.color as ProductColor | null | undefined) ?? null,
         }),
       ),
       totalAmount,
