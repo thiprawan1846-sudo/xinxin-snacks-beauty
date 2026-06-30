@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getVariantsByProduct, replaceVariants } from "@/lib/db";
+import { getVariantsByProduct, replaceVariants, updateProduct } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth";
 import type { ProductColor, ProductSize } from "@/types";
 
@@ -61,5 +61,10 @@ export async function PUT(
     }));
 
   const result = await replaceVariants(id, clean);
+
+  // 同步 Product.stock = sum(variants.stock)
+  const totalStock = result.reduce((sum, v) => sum + v.stock, 0);
+  await updateProduct(id, { stock: totalStock });
+
   return NextResponse.json({ data: result });
 }

@@ -146,26 +146,37 @@ export default function AdminInventoryPage() {
             key: "edit",
             header: "ปรับสต็อก",
             className: "w-48",
-            render: (p) => (
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  min={0}
-                  value={drafts[p.id] ?? String(p.stock)}
-                  onChange={(e) => setDraft(p.id, e.target.value)}
-                  className="h-9 w-20 rounded-full border border-sakura-200 bg-white px-3 text-sm text-ink outline-none focus:border-sakura-400 focus:ring-2 focus:ring-sakura-200"
-                />
-                <Button
-                  size="sm"
-                  variant="gradient"
-                  onClick={() => save(p.id)}
-                  disabled={drafts[p.id] === undefined}
-                >
-                  <Save className="h-3.5 w-3.5" />
-                  บันทึก
-                </Button>
-              </div>
-            ),
+            render: (p) => {
+              const isClothing = p.category === "clothing";
+              return (
+                <div className="flex items-center gap-2">
+                  {isClothing ? (
+                    <span className="text-xs text-ink-muted">
+                      จัดการผ่าน SKU
+                    </span>
+                  ) : (
+                    <>
+                      <input
+                        type="number"
+                        min={0}
+                        value={drafts[p.id] ?? String(p.stock)}
+                        onChange={(e) => setDraft(p.id, e.target.value)}
+                        className="h-9 w-20 rounded-full border border-sakura-200 bg-white px-3 text-sm text-ink outline-none focus:border-sakura-400 focus:ring-2 focus:ring-sakura-200"
+                      />
+                      <Button
+                        size="sm"
+                        variant="gradient"
+                        onClick={() => save(p.id)}
+                        disabled={drafts[p.id] === undefined}
+                      >
+                        <Save className="h-3.5 w-3.5" />
+                        บันทึก
+                      </Button>
+                    </>
+                  )}
+                </div>
+              );
+            },
           },
         ]}
       />

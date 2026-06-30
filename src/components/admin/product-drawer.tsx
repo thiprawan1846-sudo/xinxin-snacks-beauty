@@ -156,12 +156,36 @@ export function ProductDrawer({ open, product, onClose, onSaved }: Props) {
     if (!form.nameTh.trim()) return "请填写商品名称（泰文）";
     if (!form.name.trim()) return "请填写商品名称（英文）";
     if (!form.price || Number(form.price) < 0) return "请填写有效的价格";
-    if (form.stock === "" || Number(form.stock) < 0) return "请填写有效的库存";
     if (!form.imageUrl.trim()) return "请上传或填写商品图片";
+
+    // 服饰商品：校验 variants
     if (isClothing) {
       if (selectedSizes.length === 0) return "服饰商品请至少选择一个尺码";
       if (selectedColors.length === 0) return "服饰商品请至少选择一个颜色";
+
+      // 检查是否至少有一个 variant
+      const hasVariant = selectedSizes.length > 0 && selectedColors.length > 0;
+      if (!hasVariant) return "请至少添加一个SKU";
+
+      // 检查是否至少有一个 variant 库存 > 0
+      let hasStock = false;
+      for (const size of selectedSizes) {
+        for (const color of selectedColors) {
+          const draft = variantDrafts[skuKey(size, color)];
+          const stock = draft ? Math.max(0, Math.floor(Number(draft.stock) || 0)) : 0;
+          if (stock > 0) {
+            hasStock = true;
+            break;
+          }
+        }
+        if (hasStock) break;
+      }
+      if (!hasStock) return "请填写SKU库存";
+    } else {
+      // 普通商品：校验 form.stock
+      if (form.stock === "" || Number(form.stock) < 0) return "请填写有效的库存";
     }
+
     return null;
   }
 
@@ -175,6 +199,13 @@ export function ProductDrawer({ open, product, onClose, onSaved }: Props) {
     setSaving(true);
     setError(null);
 
+    // 服饰商品：计算 variants 总库存
+    const totalStock = isClothing
+      ? Object.values(variantDrafts).reduce((sum, d) => {
+          return sum + Math.max(0, Math.floor(Number(d.stock) || 0));
+        }, 0)
+      : Number(form.stock);
+
     const payload = {
       name: form.name.trim(),
       nameTh: form.nameTh.trim(),
@@ -183,7 +214,7 @@ export function ProductDrawer({ open, product, onClose, onSaved }: Props) {
       category: form.category,
       brand: form.brand.trim() || undefined,
       price: Number(form.price),
-      stock: Number(form.stock),
+      stock: totalStock,
       imageUrl: form.imageUrl.trim(),
       status: form.status,
       isFeatured: form.isFeatured,
