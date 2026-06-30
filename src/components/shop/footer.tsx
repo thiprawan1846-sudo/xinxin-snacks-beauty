@@ -7,6 +7,7 @@ const FOOTER_LINKS = [
       { href: "/products", label: "สินค้าทั้งหมด" },
       { href: "/products?category=snacks", label: "ขนมจีน" },
       { href: "/products?category=beauty", label: "เครื่องสำอางจีน" },
+      { href: "/products?category=clothing", label: "เสื้อผ้าจีน" },
       { href: "/orders", label: "คำสั่งซื้อของฉัน" },
     ],
   },

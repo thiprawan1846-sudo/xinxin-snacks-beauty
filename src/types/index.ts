@@ -3,7 +3,7 @@
  * These mirror the Prisma schema and are shared across client/server.
  */
 
-export type Category = "snacks" | "beauty" | "drinks" | "all";
+export type Category = "snacks" | "beauty" | "drinks" | "clothing" | "all";
 
 export type ProductStatus = "ACTIVE" | "INACTIVE" | "DRAFT";
 

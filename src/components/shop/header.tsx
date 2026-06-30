@@ -15,6 +15,7 @@ const NAV_LINKS = [
   { href: "/products", labelTh: "สินค้าทั้งหมด", label: "Products" },
   { href: "/products?category=snacks", labelTh: "ขนม", label: "Snacks" },
   { href: "/products?category=beauty", labelTh: "เครื่องสำอาง", label: "Beauty" },
+  { href: "/products?category=clothing", labelTh: "เสื้อผ้า", label: "Clothing" },
   { href: "/orders", labelTh: "คำสั่งซื้อ", label: "Orders" },
 ];
 

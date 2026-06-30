@@ -15,7 +15,7 @@ import {
 export const revalidate = 60;
 
 export default async function HomePage() {
-  const [categories, featured, newArrivals, snacks, beauty, drinks] =
+  const [categories, featured, newArrivals, snacks, beauty, drinks, clothing] =
     await Promise.all([
       getCategories(),
       getFeaturedProducts(8),
@@ -23,12 +23,14 @@ export default async function HomePage() {
       getProductsByCategory("snacks"),
       getProductsByCategory("beauty"),
       getProductsByCategory("drinks"),
+      getProductsByCategory("clothing"),
     ]);
 
   const categoryCounts: Record<string, number> = {
     snacks: snacks.length,
     beauty: beauty.length,
     drinks: drinks.length,
+    clothing: clothing.length,
   };
 
   // 4 张 Hero 拼贴图，仅来自推荐商品（isFeatured=true）。
@@ -134,6 +136,31 @@ export default async function HomePage() {
           </div>
         </div>
       </section>
+
+      {/* Clothing spotlight — เสื้อผ้าแนะนำ */}
+      {clothing.length > 0 && (
+        <section className="container-x py-10">
+          <SectionHeading
+            eyebrow="👕 เสื้อผ้าแนะนำ"
+            title="แฟชั่นจากจีน"
+            subtitle="เสื้อผ้าสไตล์เกาหลีและจีนที่กำลังฮิต"
+            action={
+              <Link
+                href="/products?category=clothing"
+                className="pill h-10 bg-sakura-50 px-5 text-sm font-semibold text-sakura-600 transition-colors hover:bg-sakura-100"
+              >
+                ดูทั้งหมด
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            }
+          />
+          <div className="mt-6 grid grid-cols-2 gap-4 md:grid-cols-4">
+            {clothing.slice(0, 4).map((p, i) => (
+              <ProductCard key={p.id} product={p} priority={i < 4} />
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* New arrivals */}
       <section className="container-x py-10">

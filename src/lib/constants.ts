@@ -57,6 +57,7 @@ export const CATEGORY_LABEL: Record<Category, { label: string; emoji: string }> 
   snacks: { label: "ขนม", emoji: "🍪" },
   beauty: { label: "เครื่องสำอาง", emoji: "💄" },
   drinks: { label: "เครื่องดื่ม", emoji: "🧋" },
+  clothing: { label: "เสื้อผ้า", emoji: "👕" },
 };
 
 export const LOW_STOCK_THRESHOLD = 15;

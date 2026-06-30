@@ -205,6 +205,7 @@ export function ProductDrawer({ open, product, onClose, onSaved }: Props) {
                     { value: "snacks", label: "零食" },
                     { value: "beauty", label: "美妆" },
                     { value: "drinks", label: "饮料" },
+                    { value: "clothing", label: "服饰" },
                   ]}
                 />
               </Field>

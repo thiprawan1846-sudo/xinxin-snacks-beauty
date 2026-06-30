@@ -141,6 +141,7 @@ export default function AdminProductsPage() {
               { value: "snacks", label: CATEGORY_LABEL.snacks.label },
               { value: "beauty", label: CATEGORY_LABEL.beauty.label },
               { value: "drinks", label: CATEGORY_LABEL.drinks.label },
+              { value: "clothing", label: CATEGORY_LABEL.clothing.label },
             ]}
           />
 
